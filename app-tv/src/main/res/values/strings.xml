@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StreamRecorder</string>
+    <string name="empty_state">Select a streamer\nChoose from the list to view their recordings</string>
+    <string name="loading">Loading…</string>
+    <string name="loading_recordings">Loading recordings…</string>
+    <string name="loading_stream">Loading stream…</string>
+    <string name="no_recordings">No recordings</string>
+    <string name="no_streamers">No streamers found</string>
+    <string name="error_connect">Can\'t connect to server</string>
+    <string name="error_load">Couldn\'t load recordings</string>
+    <string name="error_stream">Stream unavailable</string>
+    <string name="offline_cached">Offline — showing cached data</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="refresh_done">Refresh complete</string>
+    <string name="retry">Retry</string>
+    <string name="live_now">LIVE NOW</string>
+    <string name="settings">Settings</string>
+
+    <!-- Settings -->
+    <string name="pref_server">Server Connection</string>
+    <string name="pref_server_auto">Auto-detect (LAN → public)</string>
+    <string name="pref_server_lan">LAN only</string>
+    <string name="pref_server_public">Public only</string>
+    <string name="pref_player">Default Player</string>
+    <string name="pref_player_mpv">mpv</string>
+    <string name="pref_player_mx">MX Player</string>
+    <string name="pref_player_generic">System default</string>
+    <string name="pref_mx_version">MX Player Version</string>
+    <string name="pref_mx_pro">MX Player Pro</string>
+    <string name="pref_mx_free">MX Player Free</string>
+
+    <!-- Players -->
+    <string name="play">Play</string>
+    <string name="resume">Resume</string>
+    <string name="play_with_mpv">MPV</string>
+    <string name="play_with_mx">MX</string>
+    <string name="play_generic">Play</string>
+    <string name="favorite">Favorite</string>
+    <string name="hide">Hide</string>
+</resources>

@@ -4,14 +4,9 @@
 /.idea
 .DS_Store
 /build
+/app/build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
-
-# Module build outputs
-app-tv/build/
-core/build/
-
-# Gradle wrapper JAR (downloaded on first build)
 !gradle/wrapper/gradle-wrapper.jar

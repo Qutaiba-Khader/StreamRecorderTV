@@ -1,0 +1,6 @@
+-dontwarn org.json.**
+-keep class com.streamrecorder.tvapp.** { *; }
+-keep class okhttp3.** { *; }
+-keep class com.bumptech.glide.** { *; }
+-keep class androidx.leanback.** { *; }
+-keep interface androidx.leanback.** { *; }

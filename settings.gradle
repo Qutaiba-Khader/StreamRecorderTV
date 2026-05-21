@@ -1,0 +1,2 @@
+rootProject.name = "StreamRecorderTV"
+include ":app"

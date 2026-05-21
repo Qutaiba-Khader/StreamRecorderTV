@@ -20,7 +20,7 @@ class SettingsFragment : VerticalGridSupportFragment(),
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val presenter = VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_SMALL)
+        val presenter = VerticalGridPresenter(FocusHighlight.ZOOM_FACTOR_SMALL, false)
         presenter.numberOfColumns = 3
         gridPresenter = presenter
         adapter = gridAdapter
@@ -37,6 +37,11 @@ class SettingsFragment : VerticalGridSupportFragment(),
                 "theme" -> showPicker("Theme", AppPreferences.themeNames, AppPreferences.theme) {
                     AppPreferences.theme = it
                     applyTheme()
+                }
+                "cardSize" -> showPicker("Card Size", AppPreferences.cardSizes, AppPreferences.cardSize) {
+                    AppPreferences.cardSize = it
+                    refreshSettings()
+                    Toast.makeText(requireContext(), "Card size: $it — switch streamer to apply", Toast.LENGTH_SHORT).show()
                 }
                 "trackPosition" -> {
                     AppPreferences.trackPosition = !AppPreferences.trackPosition
@@ -62,6 +67,7 @@ class SettingsFragment : VerticalGridSupportFragment(),
         gridAdapter.add(SettingsItem("player", "Default Player", AppPreferences.defaultPlayer))
         gridAdapter.add(SettingsItem("resolution", "Preferred Resolution", AppPreferences.preferredResolution))
         gridAdapter.add(SettingsItem("theme", "Theme", AppPreferences.theme))
+        gridAdapter.add(SettingsItem("cardSize", "Card Size", AppPreferences.cardSize))
         gridAdapter.add(SettingsItem("trackPosition", "Track Watch Position", if (AppPreferences.trackPosition) "ON" else "OFF"))
         gridAdapter.add(SettingsItem("hiddenSources", "Hidden Sources", "Coming soon"))
         gridAdapter.add(SettingsItem("refresh", "Refresh Data", "Clear cache & reload"))

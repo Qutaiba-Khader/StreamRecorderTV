@@ -20,7 +20,7 @@ class SettingsCardPresenter : Presenter() {
 
         if (cardWidth == 0) {
             val screenWidth = maxOf(dm.widthPixels, dm.heightPixels)
-            cardWidth = (screenWidth * 0.85f / 3).toInt()
+            cardWidth = (screenWidth * 0.80f / 3).toInt()
             cardHeight = (80 * dm.density).toInt()
         }
 

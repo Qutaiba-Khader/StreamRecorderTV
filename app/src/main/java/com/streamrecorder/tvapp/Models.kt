@@ -24,9 +24,22 @@ data class Recording(
     val sources: List<Source>,
     val isFav: Boolean,
     val posterSmall270: String?,
-    val posterSmall192: String?
+    val posterSmall192: String?,
+    val watchPercentage: Int = 0
 ) {
     val bestSource: Source? get() = sources.maxByOrNull { it.filesize }
     val thumbnail: String? get() = posterSmall270 ?: posterSmall192
     val displayDate: String get() = recordedAt.replace("T", " ").take(16)
 }
+
+data class LiveStreamData(
+    val isLive: Boolean,
+    val title: String,
+    val streams: Map<String, String>
+)
+
+data class LiveStreamCard(
+    val title: String,
+    val streams: Map<String, String>,
+    val streamerName: String
+)

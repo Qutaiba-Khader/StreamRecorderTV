@@ -61,13 +61,7 @@ class HeaderPresenter : RowHeaderPresenter() {
             }
         } else {
             label.text = "⚙  ${headerItem.name}"
-            icon.visibility = View.VISIBLE
-            val dot = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.parseColor("#00D4AA"))
-                setSize(56, 56)
-            }
-            icon.setImageDrawable(dot)
+            icon.visibility = View.GONE
         }
     }
 

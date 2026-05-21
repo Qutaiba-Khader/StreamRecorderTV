@@ -16,8 +16,10 @@ data class ThemeColors(
 object AppPreferences {
     private lateinit var prefs: SharedPreferences
 
-    val players = listOf("Any (System Picker)", "MPV", "MX Player", "VLC", "Just Player")
+    val players = listOf("Any (System Picker)", "MPV", "MX Player", "MX Player Pro", "VLC", "Just Player")
     val resolutions = listOf("Max", "1080p", "720p", "480p")
+    val cardSizes = listOf("Tiny", "Small", "Medium", "Large")
+
     val themeNames = listOf(
         "Glass Dark", "Midnight Blue", "AMOLED Black", "Deep Purple", "Ocean",
         "Charcoal", "Warm Dark", "Light", "Light Blue", "Light Warm"
@@ -26,7 +28,8 @@ object AppPreferences {
     private val playerPackages = mapOf(
         "Any (System Picker)" to "",
         "MPV" to "is.xyz.mpv",
-        "MX Player" to "com.mxtech.videoplayer.pro",
+        "MX Player" to "com.mxtech.videoplayer.ad",
+        "MX Player Pro" to "com.mxtech.videoplayer.pro",
         "VLC" to "org.videolan.vlc",
         "Just Player" to "com.brouken.player"
     )
@@ -103,6 +106,26 @@ object AppPreferences {
     var theme: String
         get() = prefs.getString("theme", "Glass Dark") ?: "Glass Dark"
         set(value) = prefs.edit().putString("theme", value).apply()
+
+    var cardSize: String
+        get() = prefs.getString("cardSize", "Medium") ?: "Medium"
+        set(value) = prefs.edit().putString("cardSize", value).apply()
+
+    fun saveWatchPosition(recId: Int, position: Long, duration: Long) {
+        if (duration <= 0) return
+        val pct = ((position * 100) / duration).toInt().coerceIn(0, 100)
+        prefs.edit().putInt("wp_$recId", pct).apply()
+    }
+
+    fun getWatchPercent(recId: Int): Int = prefs.getInt("wp_$recId", 0)
+
+    fun cardWidthFraction(): Float = when (cardSize) {
+        "Tiny" -> 0.65f
+        "Small" -> 0.72f
+        "Medium" -> 0.80f
+        "Large" -> 0.88f
+        else -> 0.80f
+    }
 
     fun currentTheme(): ThemeColors = themes[theme] ?: themes["Glass Dark"]!!
 

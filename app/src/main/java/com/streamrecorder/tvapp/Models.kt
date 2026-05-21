@@ -43,3 +43,10 @@ data class LiveStreamCard(
     val streams: Map<String, String>,
     val streamerName: String
 )
+
+data class HiddenSource(
+    val recId: Int,
+    val res: Int,
+    val date: String,
+    val streamer: String
+)

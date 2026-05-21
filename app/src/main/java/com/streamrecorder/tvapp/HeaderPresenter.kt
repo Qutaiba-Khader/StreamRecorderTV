@@ -1,7 +1,6 @@
 package com.streamrecorder.tvapp
 
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -13,8 +12,9 @@ import androidx.leanback.widget.PageRow
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.RowHeaderPresenter
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 
-class HeaderPresenter : RowHeaderPresenter() {
+class HeaderPresenter(private val onLongClick: ((Int) -> Unit)? = null) : RowHeaderPresenter() {
     private var unselectedAlpha = 0.5f
 
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
@@ -52,16 +52,34 @@ class HeaderPresenter : RowHeaderPresenter() {
 
         if (headerItem is StreamerHeaderItem) {
             label.text = if (headerItem.isLive) "🔴 ${headerItem.name}" else headerItem.name
+            label.setTextColor(Color.WHITE)
             icon.visibility = View.VISIBLE
             val logoUrl = headerItem.logoUrl?.replace("250x250", "56x56")
-            if (logoUrl != null) {
-                Glide.with(icon.context).load(logoUrl).circleCrop().override(56, 56).into(icon)
+            if (!logoUrl.isNullOrEmpty() && logoUrl != "null") {
+                Glide.with(icon.context)
+                    .asBitmap()
+                    .load(logoUrl)
+                    .circleCrop()
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .into(icon)
             } else {
                 icon.setImageDrawable(null)
             }
+            row.setOnLongClickListener {
+                onLongClick?.invoke(headerItem.id.toInt())
+                true
+            }
+        } else if (headerItem.id == MainFragment.HIDDEN_ID) {
+            val count = AppPreferences.getHiddenSources().size
+            label.text = "🚫 Hidden ($count)"
+            label.setTextColor(Color.parseColor("#FF8866"))
+            icon.visibility = View.GONE
+            row.setOnLongClickListener(null)
         } else {
             label.text = "⚙  ${headerItem.name}"
+            label.setTextColor(Color.WHITE)
             icon.visibility = View.GONE
+            row.setOnLongClickListener(null)
         }
     }
 

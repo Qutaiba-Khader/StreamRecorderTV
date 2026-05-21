@@ -49,11 +49,13 @@ class SettingsFragment : VerticalGridSupportFragment(),
                     Toast.makeText(requireContext(), "Track Position: ${if (AppPreferences.trackPosition) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
                 }
                 "hiddenSources" -> {
-                    Toast.makeText(requireContext(), "Hidden sources manager coming soon", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Manage hidden sources on the web app", Toast.LENGTH_SHORT).show()
                 }
                 "refresh" -> {
-                    ApiClient.clearCache()
-                    Toast.makeText(requireContext(), "Cache cleared", Toast.LENGTH_SHORT).show()
+                    val mainFragment = requireActivity().supportFragmentManager
+                        .findFragmentById(android.R.id.content) as? MainFragment
+                    mainFragment?.refreshAll()
+                    Toast.makeText(requireContext(), "Refreshing...", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -69,7 +71,7 @@ class SettingsFragment : VerticalGridSupportFragment(),
         gridAdapter.add(SettingsItem("theme", "Theme", AppPreferences.theme))
         gridAdapter.add(SettingsItem("cardSize", "Card Size", AppPreferences.cardSize))
         gridAdapter.add(SettingsItem("trackPosition", "Track Watch Position", if (AppPreferences.trackPosition) "ON" else "OFF"))
-        gridAdapter.add(SettingsItem("hiddenSources", "Hidden Sources", "Coming soon"))
+        gridAdapter.add(SettingsItem("hiddenSources", "Hidden Sources", "Web app only"))
         gridAdapter.add(SettingsItem("refresh", "Refresh Data", "Clear cache & reload"))
     }
 
@@ -92,6 +94,8 @@ class SettingsFragment : VerticalGridSupportFragment(),
         val mainFragment = requireActivity().supportFragmentManager
             .findFragmentById(android.R.id.content) as? MainFragment
         mainFragment?.brandColor = t.brand
-        mainFragment?.searchAffordanceColor = t.accent
+        mainFragment?.currentGridFragment?.let { grid ->
+            grid.refreshData()
+        }
     }
 }

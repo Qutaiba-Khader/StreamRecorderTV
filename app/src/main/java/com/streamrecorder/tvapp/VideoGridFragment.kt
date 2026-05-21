@@ -10,7 +10,6 @@ import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +27,7 @@ import androidx.leanback.widget.OnItemViewClickedListener
 import androidx.leanback.widget.VerticalGridPresenter
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 class VideoGridFragment : VerticalGridSupportFragment(),
@@ -36,11 +36,12 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     private val mainAdapter = BrowseSupportFragment.MainFragmentAdapter(this)
     private val gridAdapter = ArrayObjectAdapter(CardPresenter { item -> onItemLongClicked(item) })
     private var headerView: LinearLayout? = null
+    private var statusText: TextView? = null
     private var allRecordings: List<Recording> = emptyList()
     private var liveCard: LiveStreamCard? = null
     private var favOnly = false
+    private var dataLoaded = false
     private var favButton: TextView? = null
-    private var placeholderView: LinearLayout? = null
     private var playingRecId: Int = -1
     private var playingDuration: Int = 0
     private var playingRes: Int = 0
@@ -49,7 +50,6 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     override fun getMainFragmentAdapter(): BrowseSupportFragment.MainFragmentAdapter<*> = mainAdapter
 
     companion object {
-        private const val TAG = "StreamRecGrid"
         fun newInstance(
             targetId: Int, isLive: Boolean = false,
             streamerName: String = "", logoUrl: String = "",
@@ -69,7 +69,15 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val gridView = super.onCreateView(inflater, container, savedInstanceState)!!
 
-        val wrapper = LinearLayout(requireContext()).apply {
+        val verticalGrid = gridView.findViewById<androidx.leanback.widget.VerticalGridView>(
+            androidx.leanback.R.id.browse_grid
+        )
+        verticalGrid?.setGravity(Gravity.START)
+
+        val ctx = requireContext()
+        val d = ctx.resources.displayMetrics.density
+
+        val wrapper = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -80,36 +88,22 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         headerView = createHeader()
         wrapper.addView(headerView)
 
-        val ctx = requireContext()
-        val d = ctx.resources.displayMetrics.density
         val t = AppPreferences.currentTheme()
-        val placeholder = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
+        statusText = TextView(ctx).apply {
+            text = "Loading..."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(t.textSecondary)
             gravity = Gravity.CENTER
+            visibility = if (dataLoaded) View.GONE else View.VISIBLE
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-            )
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (24 * d).toInt() }
         }
-        val arrow = TextView(ctx).apply {
-            text = "▶"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
-            setTextColor(t.textSecondary)
-            gravity = Gravity.CENTER
-        }
-        val hint = TextView(ctx).apply {
-            text = "Press to load"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(t.textSecondary)
-            gravity = Gravity.CENTER
-            setPadding(0, (8 * d).toInt(), 0, 0)
-        }
-        placeholder.addView(arrow)
-        placeholder.addView(hint)
-        placeholderView = placeholder
-        wrapper.addView(placeholder)
+        wrapper.addView(statusText)
 
         wrapper.addView(gridView, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
         return wrapper
@@ -132,23 +126,29 @@ class VideoGridFragment : VerticalGridSupportFragment(),
             val ph = (24 * d).toInt()
             val pv = (12 * d).toInt()
             setPadding(ph, pv, ph, pv)
-            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         }
 
         val avatarSize = (36 * d).toInt()
+        val avatarBg = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor("#2A2A3E"))
+        }
         val avatar = ImageView(ctx).apply {
-            val size = avatarSize
-            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+            layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize).apply {
                 marginEnd = (10 * d).toInt()
             }
             scaleType = ImageView.ScaleType.CENTER_CROP
+            background = avatarBg
         }
         header.addView(avatar)
 
-        if (logoUrl.isNotEmpty()) {
-            val smallUrl = logoUrl.replace("250x250", "56x56")
-            Glide.with(ctx).load(smallUrl).circleCrop()
-                .override(56, 56).into(avatar)
+        val actualLogoUrl = logoUrl.replace("250x250", "56x56")
+        if (actualLogoUrl.isNotEmpty() && actualLogoUrl != "null") {
+            Glide.with(ctx)
+                .asBitmap()
+                .load(actualLogoUrl)
+                .circleCrop()
+                .into(avatar)
         }
 
         val info = LinearLayout(ctx).apply {
@@ -220,18 +220,11 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                 is Recording -> openRecording(item)
             }
         }
-    }
 
-    private var dataLoaded = false
-
-    fun loadData() {
-        if (dataLoaded) return
-        dataLoaded = true
-        placeholderView?.visibility = View.GONE
         loadRecordings()
     }
 
-    fun onItemLongClicked(item: Any) {
+    private fun onItemLongClicked(item: Any) {
         when (item) {
             is Recording -> showRecordingContextMenu(item)
             is LiveStreamCard -> showLiveContextMenu(item)
@@ -247,13 +240,9 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         for (src in sortedSources) {
             val sz = formatSize(src.filesize)
             items.add("▶  Play ${src.resolution}p  ($sz)")
-            actions.add {
-                launchPlayer(ApiClient.playUrl(rec.id, src.resolution))
-            }
+            actions.add { launchPlayer(ApiClient.playUrl(rec.id, src.resolution)) }
             items.add("📲  Open with... ${src.resolution}p")
-            actions.add {
-                launchSystemPicker(ApiClient.playUrl(rec.id, src.resolution))
-            }
+            actions.add { launchSystemPicker(ApiClient.playUrl(rec.id, src.resolution)) }
         }
 
         items.add(if (rec.isFav) "💚  Unfavorite" else "🤍  Favorite")
@@ -272,6 +261,10 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     }
 
     private fun showLiveContextMenu(card: LiveStreamCard) {
+        if (card.streams.isEmpty()) {
+            Toast.makeText(requireContext(), "Loading stream...", Toast.LENGTH_SHORT).show()
+            return
+        }
         val ctx = requireContext()
         val items = mutableListOf<String>()
         val urls = mutableListOf<String>()
@@ -314,16 +307,18 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                 Toast.makeText(requireContext(),
                     if (newFav) "Added to favorites" else "Removed from favorites",
                     Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 Toast.makeText(requireContext(), "Error toggling favorite", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun hideSource(rec: Recording, res: Int) {
+        val streamerName = arguments?.getString("streamerName") ?: ""
         lifecycleScope.launch {
             try {
                 ApiClient.hideSource(rec.id, res)
+                AppPreferences.addHidden(rec.id, res, rec.displayDate, streamerName)
                 val pos = (0 until gridAdapter.size()).firstOrNull {
                     (gridAdapter.get(it) as? Recording)?.id == rec.id
                 }
@@ -338,7 +333,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                 val targetId = arguments?.getInt("targetId") ?: return@launch
                 ApiClient.clearCacheFor(targetId)
                 Toast.makeText(requireContext(), "${res}p source hidden", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 Toast.makeText(requireContext(), "Error hiding source", Toast.LENGTH_SHORT).show()
             }
         }
@@ -355,6 +350,10 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     }
 
     private fun openLiveStream(card: LiveStreamCard) {
+        if (card.streams.isEmpty()) {
+            Toast.makeText(requireContext(), "Loading stream...", Toast.LENGTH_SHORT).show()
+            return
+        }
         playingRecId = -1
         playingDuration = 0
         val url = card.streams.values.firstOrNull() ?: return
@@ -395,12 +394,9 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         var durMs = -1L
 
         if (data != null) {
-            // MPV: long "position" (ms), int "position" (ms)
             posMs = data.getLongExtra("position", -1L)
             if (posMs < 0) posMs = data.getIntExtra("position", -1).toLong()
-            // VLC: "extra_position" (long, ms)
             if (posMs < 0) posMs = data.getLongExtra("extra_position", -1L)
-            // MX Player: "com.mxtech.intent.result.position" (int, ms)
             if (posMs < 0) posMs = data.getIntExtra("com.mxtech.intent.result.position", -1).toLong()
 
             durMs = data.getLongExtra("duration", -1L)
@@ -470,32 +466,67 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         gridAdapter.addAll(gridAdapter.size(), list)
     }
 
+    fun refreshData() {
+        val targetId = arguments?.getInt("targetId") ?: return
+        ApiClient.clearCacheFor(targetId)
+        allRecordings = emptyList()
+        liveCard = null
+        dataLoaded = false
+        gridAdapter.clear()
+        statusText?.text = "Loading..."
+        statusText?.visibility = View.VISIBLE
+        loadRecordings()
+    }
+
     private fun loadRecordings() {
         val targetId = arguments?.getInt("targetId") ?: return
         val isLive = arguments?.getBoolean("isLive", false) ?: false
         val streamerName = arguments?.getString("streamerName") ?: ""
 
+        if (isLive && streamerName.isNotEmpty()) {
+            liveCard = LiveStreamCard(
+                title = "$streamerName LIVE",
+                streams = emptyMap(),
+                streamerName = streamerName
+            )
+            gridAdapter.add(liveCard!!)
+        }
+
         lifecycleScope.launch {
             try {
-                if (isLive && streamerName.isNotEmpty()) {
-                    val slug = streamerName.removePrefix("@")
-                    val liveData = ApiClient.loadLiveStream(slug)
+                val liveDeferred = if (isLive && streamerName.isNotEmpty()) {
+                    async {
+                        val slug = streamerName.removePrefix("@")
+                        ApiClient.loadLiveStream(slug)
+                    }
+                } else null
+
+                val recordings = ApiClient.loadRecordings(targetId)
+                allRecordings = recordings
+                dataLoaded = true
+                statusText?.visibility = View.GONE
+                rebuildGrid()
+                mainAdapter.fragmentHost?.notifyDataReady(mainAdapter)
+
+                liveDeferred?.let { deferred ->
+                    val liveData = deferred.await()
                     if (liveData != null) {
                         liveCard = LiveStreamCard(
                             title = liveData.title,
                             streams = liveData.streams,
                             streamerName = streamerName
                         )
-                        gridAdapter.add(liveCard!!)
+                        if (gridAdapter.size() > 0 && gridAdapter.get(0) is LiveStreamCard) {
+                            gridAdapter.replace(0, liveCard!!)
+                        }
                     }
                 }
-                val recordings = ApiClient.loadRecordings(targetId)
-                allRecordings = recordings
-                gridAdapter.addAll(gridAdapter.size(), recordings)
             } catch (e: Exception) {
-                Log.e(TAG, "loadRecordings($targetId) failed", e)
+                Log.e("StreamRecGrid", "loadRecordings($targetId) failed", e)
+                statusText?.text = "Failed to load recordings"
+                statusText?.visibility = View.VISIBLE
+                mainAdapter.fragmentHost?.notifyDataReady(mainAdapter)
             }
-            mainAdapter.fragmentHost?.notifyDataReady(mainAdapter)
         }
     }
 }

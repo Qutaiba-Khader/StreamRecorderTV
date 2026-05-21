@@ -36,6 +36,8 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
             cornerRadius = 8 * d
         }
 
+        val totalHeight = cardHeight + (64 * d).toInt()
+
         val root = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = cardBg
@@ -43,7 +45,7 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
             outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             isFocusable = true
             isFocusableInTouchMode = true
-            layoutParams = ViewGroup.MarginLayoutParams(cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            layoutParams = ViewGroup.MarginLayoutParams(cardWidth, totalHeight).apply {
                 val m = (4 * d).toInt()
                 setMargins(m, m, m, m)
             }

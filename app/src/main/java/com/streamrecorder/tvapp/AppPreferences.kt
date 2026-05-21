@@ -129,6 +129,35 @@ object AppPreferences {
 
     fun currentTheme(): ThemeColors = themes[theme] ?: themes["Glass Dark"]!!
 
+    fun addHidden(recId: Int, res: Int, date: String, streamer: String) {
+        val set = prefs.getStringSet("hidden_sources", mutableSetOf())!!.toMutableSet()
+        set.add("$recId|$res|$date|$streamer")
+        prefs.edit().putStringSet("hidden_sources", set).apply()
+    }
+
+    fun removeHidden(recId: Int, res: Int) {
+        val set = prefs.getStringSet("hidden_sources", mutableSetOf())!!.toMutableSet()
+        set.removeAll { it.startsWith("$recId|$res|") }
+        prefs.edit().putStringSet("hidden_sources", set).apply()
+    }
+
+    fun getHiddenSources(): List<HiddenSource> {
+        val set = prefs.getStringSet("hidden_sources", emptySet()) ?: emptySet()
+        return set.mapNotNull { entry ->
+            val parts = entry.split("|", limit = 4)
+            if (parts.size >= 4) HiddenSource(
+                recId = parts[0].toIntOrNull() ?: return@mapNotNull null,
+                res = parts[1].toIntOrNull() ?: return@mapNotNull null,
+                date = parts[2],
+                streamer = parts[3]
+            ) else null
+        }.sortedByDescending { it.date }
+    }
+
+    var cachedTargetsJson: String?
+        get() = prefs.getString("cached_targets", null)
+        set(value) = prefs.edit().putString("cached_targets", value).apply()
+
     fun resolvePlayerPackage(): String = playerPackages[defaultPlayer] ?: ""
 
     fun resolveResolution(sources: List<Source>): Source? {

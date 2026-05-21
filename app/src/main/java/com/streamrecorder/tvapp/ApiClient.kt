@@ -11,53 +11,66 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private const val TAG = "StreamRecAPI"
     private const val LOCAL_BASE = "http://192.168.1.31:5001"
     private const val REMOTE_BASE = "https://strm-rec-h.websnake.org"
 
-    private val localClient = OkHttpClient.Builder()
-        .connectTimeout(2, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
-    private val remoteClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val localClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+    }
+    private val remoteClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
 
     @Volatile private var activeBase: String? = null
 
     private val recordingsCache = ConcurrentHashMap<Int, List<Recording>>()
 
-    private fun resolveBase(): String {
-        activeBase?.let { return it }
-        return try {
-            val req = Request.Builder().url("$LOCAL_BASE/api/targets").build()
-            localClient.newCall(req).execute().use { it.body!!.string() }
-            LOCAL_BASE.also { activeBase = it }
-        } catch (_: Exception) {
-            REMOTE_BASE.also { activeBase = it }
-        }
-    }
+    var cachedTargetsJson: String? = null
+        private set
 
     private fun get(path: String): String {
-        val base = resolveBase()
-        val client = if (base == LOCAL_BASE) localClient else remoteClient
-        val req = Request.Builder().url("$base$path").build()
+        val base = activeBase
+        if (base != null) {
+            val client = if (base == LOCAL_BASE) localClient else remoteClient
+            val req = Request.Builder().url("$base$path").build()
+            return try {
+                client.newCall(req).execute().use { it.body!!.string() }
+            } catch (e: Exception) {
+                if (base == LOCAL_BASE) {
+                    activeBase = REMOTE_BASE
+                    val req2 = Request.Builder().url("$REMOTE_BASE$path").build()
+                    remoteClient.newCall(req2).execute().use { it.body!!.string() }
+                } else throw e
+            }
+        }
         return try {
-            client.newCall(req).execute().use { it.body!!.string() }
-        } catch (e: Exception) {
-            if (base == LOCAL_BASE) {
-                activeBase = REMOTE_BASE
-                val req2 = Request.Builder().url("$REMOTE_BASE$path").build()
-                remoteClient.newCall(req2).execute().use { it.body!!.string() }
-            } else throw e
+            val req = Request.Builder().url("$LOCAL_BASE$path").build()
+            localClient.newCall(req).execute().use { it.body!!.string() }
+                .also { activeBase = LOCAL_BASE }
+        } catch (_: Exception) {
+            activeBase = REMOTE_BASE
+            val req = Request.Builder().url("$REMOTE_BASE$path").build()
+            remoteClient.newCall(req).execute().use { it.body!!.string() }
         }
     }
 
     suspend fun loadTargets(): List<Target> = withContext(Dispatchers.IO) {
-        val json = JSONObject(get("/api/targets"))
+        val raw = get("/api/targets")
+        parseTargets(raw).also { cachedTargetsJson = raw }
+    }
+
+    fun parseTargetsFromJson(raw: String): List<Target> = parseTargets(raw)
+
+    private fun parseTargets(raw: String): List<Target> {
+        val json = JSONObject(raw)
         val arr = json.getJSONArray("targets")
-        (0 until arr.length()).map { i ->
+        return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             Target(
                 id = o.getInt("id"),
@@ -74,49 +87,54 @@ object ApiClient {
     suspend fun loadRecordings(targetId: Int): List<Recording> {
         recordingsCache[targetId]?.let { return it }
         return withContext(Dispatchers.IO) {
-            val json = JSONObject(get("/api/recordings/$targetId"))
-            val arr = json.getJSONArray("data")
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.getJSONObject(i)
-                if (o.optString("status") == "running") return@mapNotNull null
-                val srcs = o.optJSONArray("sources") ?: return@mapNotNull null
-                val sourceList = (0 until srcs.length()).map { j ->
-                    val s = srcs.getJSONObject(j)
-                    Source(
-                        resolution = s.optInt("resolution", 0),
-                        filesize = s.optLong("filesize", 0),
-                        downloadlink = s.optString("downloadlink", "")
-                    )
-                }
-                if (sourceList.isEmpty()) return@mapNotNull null
-                var watchPct = 0
-                val wpObj = o.optJSONObject("watch_positions")
-                if (wpObj != null) {
-                    val keys = wpObj.keys()
-                    while (keys.hasNext()) {
-                        val k = keys.next()
-                        val wp = wpObj.getJSONObject(k)
-                        val pos = wp.optDouble("position", 0.0)
-                        val dur = wp.optDouble("duration", 1.0)
-                        if (dur > 0) {
-                            val pct = ((pos / dur) * 100).toInt().coerceIn(0, 100)
-                            if (pct > watchPct) watchPct = pct
-                        }
-                    }
-                }
-                Recording(
-                    id = o.getInt("id"),
-                    recordedAt = o.optString("recorded_at", ""),
-                    duration = o.optInt("duration", 0),
-                    durationHr = o.optString("duration_hr", ""),
-                    sources = sourceList,
-                    isFav = o.optBoolean("is_fav", false),
-                    posterSmall270 = o.optString("poster_small_270", null).takeIf { !it.isNullOrEmpty() },
-                    posterSmall192 = o.optString("poster_small_192", null).takeIf { !it.isNullOrEmpty() },
-                    watchPercentage = watchPct
+            val raw = get("/api/recordings/$targetId")
+            parseRecordings(raw)
+        }.also { recordingsCache[targetId] = it }
+    }
+
+    private fun parseRecordings(raw: String): List<Recording> {
+        val json = JSONObject(raw)
+        val arr = json.getJSONArray("data")
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.getJSONObject(i)
+            if (o.optString("status") == "running") return@mapNotNull null
+            val srcs = o.optJSONArray("sources") ?: return@mapNotNull null
+            val sourceList = (0 until srcs.length()).map { j ->
+                val s = srcs.getJSONObject(j)
+                Source(
+                    resolution = s.optInt("resolution", 0),
+                    filesize = s.optLong("filesize", 0),
+                    downloadlink = s.optString("downloadlink", "")
                 )
             }
-        }.also { recordingsCache[targetId] = it }
+            if (sourceList.isEmpty()) return@mapNotNull null
+            var watchPct = 0
+            val wpObj = o.optJSONObject("watch_positions")
+            if (wpObj != null) {
+                val keys = wpObj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val wp = wpObj.getJSONObject(k)
+                    val pos = wp.optDouble("position", 0.0)
+                    val dur = wp.optDouble("duration", 1.0)
+                    if (dur > 0) {
+                        val pct = ((pos / dur) * 100).toInt().coerceIn(0, 100)
+                        if (pct > watchPct) watchPct = pct
+                    }
+                }
+            }
+            Recording(
+                id = o.getInt("id"),
+                recordedAt = o.optString("recorded_at", ""),
+                duration = o.optInt("duration", 0),
+                durationHr = o.optString("duration_hr", ""),
+                sources = sourceList,
+                isFav = o.optBoolean("is_fav", false),
+                posterSmall270 = o.optString("poster_small_270", null).takeIf { !it.isNullOrEmpty() },
+                posterSmall192 = o.optString("poster_small_192", null).takeIf { !it.isNullOrEmpty() },
+                watchPercentage = watchPct
+            )
+        }
     }
 
     suspend fun loadLiveStream(slug: String): LiveStreamData? = withContext(Dispatchers.IO) {
@@ -152,7 +170,7 @@ object ApiClient {
             if (streamUrls.isEmpty()) return@withContext null
             LiveStreamData(isLive = true, title = title, streams = streamUrls)
         } catch (e: Exception) {
-            Log.w(TAG, "loadLiveStream($slug) failed", e)
+            Log.w("StreamRecAPI", "loadLiveStream($slug) failed", e)
             null
         }
     }
@@ -166,18 +184,20 @@ object ApiClient {
         post("/api/hide", """{"rec_id":$recId,"res":$res}""")
     }
 
+    suspend fun unhideSource(recId: Int, res: Int) = withContext(Dispatchers.IO) {
+        post("/api/unhide", """{"rec_id":$recId,"res":$res}""")
+    }
+
     suspend fun saveWatchPosition(recId: Int, res: Int, positionMs: Long, durationMs: Long) = withContext(Dispatchers.IO) {
         try {
             val posSec = positionMs / 1000.0
             val durSec = durationMs / 1000.0
             post("/api/watch-position", """{"rec_id":$recId,"res":"$res","position":$posSec,"duration":$durSec}""")
-        } catch (e: Exception) {
-            Log.w(TAG, "saveWatchPosition failed", e)
-        }
+        } catch (_: Exception) {}
     }
 
     private fun post(path: String, jsonBody: String): JSONObject {
-        val base = resolveBase()
+        val base = activeBase ?: LOCAL_BASE
         val client = if (base == LOCAL_BASE) localClient else remoteClient
         val body = okhttp3.RequestBody.create(null, jsonBody.toByteArray())
         val req = Request.Builder()
@@ -200,7 +220,10 @@ object ApiClient {
         }
     }
 
-    fun playUrl(recId: Int, res: Int): String = "${resolveBase()}/play/$recId?res=$res"
+    fun playUrl(recId: Int, res: Int): String {
+        val base = activeBase ?: LOCAL_BASE
+        return "$base/play/$recId?res=$res"
+    }
 
     fun clearCache() {
         recordingsCache.clear()

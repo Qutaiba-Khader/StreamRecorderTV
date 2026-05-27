@@ -315,13 +315,36 @@ object ApiClient {
                         date = o.optString("date", null).takeIf { it != "null" && !it.isNullOrEmpty() },
                         user = o.optString("user", user),
                         thumbUrl = o.optString("thumb_url", null).takeIf { !it.isNullOrEmpty() },
-                        playUrl = o.optString("play_url", null).takeIf { !it.isNullOrEmpty() }
+                        playUrl = o.optString("play_url", null).takeIf { !it.isNullOrEmpty() },
+                        isFav = o.optBoolean("is_fav", false),
+                        watchPct = o.optInt("watch_pct", 0)
                     )
                 }
                 result[user] = files
             }
             result
         } catch (_: Exception) { emptyMap() }
+    }
+
+    suspend fun saveRecoWatchPosition(user: String, filename: String, positionMs: Long, durationMs: Long) = withContext(Dispatchers.IO) {
+        try {
+            val posSec = positionMs / 1000.0
+            val durSec = durationMs / 1000.0
+            post("/api/reco/watch-position", """{"user":"$user","filename":"$filename","position":$posSec,"duration":$durSec}""")
+        } catch (_: Exception) {}
+    }
+
+    suspend fun deleteRecoWatchPosition(user: String, filename: String) = withContext(Dispatchers.IO) {
+        try {
+            post("/api/reco/watch-position/delete", """{"user":"$user","filename":"$filename"}""")
+        } catch (_: Exception) {}
+    }
+
+    suspend fun toggleRecoFav(user: String, filename: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = post("/api/reco/fav", """{"user":"$user","filename":"$filename"}""")
+            json.optBoolean("is_fav", false)
+        } catch (_: Exception) { false }
     }
 
     fun clearCache() {

@@ -71,5 +71,7 @@ data class RecoFile(
     val date: String?,
     val user: String,
     val thumbUrl: String? = null,
-    val playUrl: String? = null
+    val playUrl: String? = null,
+    val isFav: Boolean = false,
+    val watchPct: Int = 0
 )

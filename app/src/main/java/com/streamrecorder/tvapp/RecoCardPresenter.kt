@@ -112,6 +112,8 @@ class RecoCardPresenter(private val onLongClick: ((RecoFile) -> Unit)? = null) :
         val dateView = body.getChildAt(0) as TextView
         val metaView = body.getChildAt(1) as TextView
 
+        while (thumbContainer.childCount > 1) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
+
         dateView.text = file.date ?: "Unknown date"
         dateView.setTextColor(t.textPrimary)
 
@@ -125,9 +127,59 @@ class RecoCardPresenter(private val onLongClick: ((RecoFile) -> Unit)? = null) :
         metaView.text = if (meta.isNotEmpty()) meta.toString() else file.filename
         metaView.setTextColor(t.textSecondary)
 
-        bg?.setColor(t.cardBg)
+        val isFav = file.isFav
+        val normalBg = if (isFav) Color.parseColor("#1A2E1A") else t.cardBg
+        val focusBg = if (isFav) Color.parseColor("#2A4A2A") else Color.parseColor("#2A2A4A")
+        bg?.setColor(normalBg)
 
-        // Load thumbnail
+        if (isFav) {
+            val favBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#CC000000"))
+                cornerRadius = 4 * d
+            }
+            val favIcon = TextView(ctx).apply {
+                text = "💚"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                background = favBg
+                val ph = (4 * d).toInt()
+                setPadding(ph, (2 * d).toInt(), ph, (2 * d).toInt())
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.END
+                    val m = (6 * d).toInt()
+                    setMargins(m, m, m, m)
+                }
+            }
+            thumbContainer.addView(favIcon)
+        }
+
+        if (file.watchPct > 0) {
+            val barHeight = (3 * d).toInt()
+            val barBg = View(ctx).apply {
+                setBackgroundColor(Color.parseColor("#4DFFFFFF"))
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, barHeight
+                ).apply { gravity = Gravity.BOTTOM }
+            }
+            thumbContainer.addView(barBg)
+            val barFill = View(ctx).apply {
+                setBackgroundColor(Color.parseColor("#FF0000"))
+                layoutParams = FrameLayout.LayoutParams(
+                    0, barHeight
+                ).apply { gravity = Gravity.BOTTOM }
+            }
+            thumbContainer.addView(barFill)
+            barFill.post {
+                val totalWidth = thumbContainer.width
+                val fillWidth = (totalWidth * file.watchPct / 100f).toInt()
+                barFill.layoutParams = (barFill.layoutParams as FrameLayout.LayoutParams).apply {
+                    width = fillWidth
+                }
+            }
+        }
+
         val thumbUrl = file.thumbUrl?.let { ApiClient.recoThumbUrl(it) }
         if (!thumbUrl.isNullOrEmpty()) {
             Glide.with(ctx)
@@ -141,12 +193,9 @@ class RecoCardPresenter(private val onLongClick: ((RecoFile) -> Unit)? = null) :
             thumbImage.setBackgroundColor(Color.parseColor("#1A1A2E"))
         }
 
-        val focusBg = Color.parseColor("#2A2A4A")
         root.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-            val scale = if (hasFocus) 1.12f else 1.0f
-            root.elevation = if (hasFocus) 8 * d else 0f
-            root.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
-            bg?.setColor(if (hasFocus) focusBg else t.cardBg)
+            root.elevation = if (hasFocus) 6 * d else 0f
+            bg?.setColor(if (hasFocus) focusBg else normalBg)
         }
 
         root.setOnLongClickListener {
@@ -158,6 +207,7 @@ class RecoCardPresenter(private val onLongClick: ((RecoFile) -> Unit)? = null) :
     override fun onUnbindViewHolder(viewHolder: ViewHolder) {
         val root = viewHolder.view as LinearLayout
         val thumbContainer = root.getChildAt(0) as FrameLayout
+        while (thumbContainer.childCount > 1) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
         val thumbImage = thumbContainer.getChildAt(0) as ImageView
         Glide.with(root.context).clear(thumbImage)
         thumbImage.setImageDrawable(null)

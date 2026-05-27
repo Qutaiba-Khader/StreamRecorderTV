@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.util.TypedValue
@@ -14,6 +15,8 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.leanback.app.BrowseSupportFragment
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
@@ -29,6 +32,11 @@ class RecoFragment : RowsSupportFragment(),
 
     private val mainAdapter = BrowseSupportFragment.MainFragmentAdapter(this)
     private var statusText: TextView? = null
+    private var favButton: TextView? = null
+    private var favOnly = false
+    private var allReco: Map<String, List<RecoFile>> = emptyMap()
+    private var playingFile: RecoFile? = null
+    private lateinit var playerLauncher: ActivityResultLauncher<Intent>
 
     override fun getMainFragmentAdapter(): BrowseSupportFragment.MainFragmentAdapter<*> = mainAdapter
 
@@ -59,8 +67,31 @@ class RecoFragment : RowsSupportFragment(),
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
             setTextColor(t.textPrimary)
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         header.addView(titleText)
+
+        val btnBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#1A7B9FFF"))
+            cornerRadius = 6 * d
+        }
+        val favBtn = TextView(ctx).apply {
+            text = "💚 Favs"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(Color.parseColor("#7B9FFF"))
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            background = btnBg
+            val ph = (14 * d).toInt()
+            val pv = (6 * d).toInt()
+            setPadding(ph, pv, ph, pv)
+            isFocusable = false
+            isFocusableInTouchMode = false
+            isClickable = true
+            setOnClickListener { toggleFavFilter() }
+        }
+        favButton = favBtn
+        header.addView(favBtn)
+
         wrapper.addView(header)
 
         statusText = TextView(ctx).apply {
@@ -84,6 +115,9 @@ class RecoFragment : RowsSupportFragment(),
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        playerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            onPlayerResult(result.data)
+        }
         adapter = ArrayObjectAdapter(ListRowPresenter())
 
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
@@ -94,20 +128,100 @@ class RecoFragment : RowsSupportFragment(),
         loadReco()
     }
 
+    private fun toggleFavFilter() {
+        favOnly = !favOnly
+        val bg = favButton?.background as? GradientDrawable
+        if (favOnly) {
+            favButton?.text = "💚 Favs ✓"
+            bg?.setColor(Color.parseColor("#335CCC5C"))
+            favButton?.setTextColor(Color.parseColor("#5CCC5C"))
+        } else {
+            favButton?.text = "💚 Favs"
+            bg?.setColor(Color.parseColor("#1A7B9FFF"))
+            favButton?.setTextColor(Color.parseColor("#7B9FFF"))
+        }
+        rebuildRows()
+    }
+
+    private fun rebuildRows() {
+        val rowsAdapter = adapter as ArrayObjectAdapter
+        rowsAdapter.clear()
+
+        val data = if (favOnly) {
+            allReco.mapValues { (_, files) -> files.filter { it.isFav } }
+                .filter { (_, files) -> files.isNotEmpty() }
+        } else {
+            allReco
+        }
+
+        if (data.isEmpty()) {
+            statusText?.text = if (favOnly) "No favorite downloads" else "No downloaded recordings"
+            statusText?.visibility = View.VISIBLE
+            return
+        }
+
+        statusText?.visibility = View.GONE
+
+        for ((username, files) in data) {
+            val headerItem = HeaderItem(username)
+            val cardAdapter = ArrayObjectAdapter(RecoCardPresenter { file -> showRecoPopup(file) })
+            for (file in files) {
+                cardAdapter.add(file)
+            }
+            rowsAdapter.add(ListRow(headerItem, cardAdapter))
+        }
+    }
+
     private fun playRecoFile(file: RecoFile) {
         if (!isAdded) return
+        playingFile = file
         val url = ApiClient.recoPlayUrl(file.user, file.filename)
         val playerPkg = AppPreferences.resolvePlayerPackage()
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
             if (playerPkg.isNotEmpty()) setPackage(playerPkg)
+            putExtra("return_result", true)
         }
         try {
-            startActivity(intent)
+            playerLauncher.launch(intent)
         } catch (_: Exception) {
             try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                playerLauncher.launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    putExtra("return_result", true)
+                })
             } catch (_: Exception) {}
+        }
+    }
+
+    private fun onPlayerResult(data: Intent?) {
+        val file = playingFile ?: return
+        playingFile = null
+
+        var posMs = -1L
+        var durMs = -1L
+
+        if (data != null) {
+            posMs = data.getLongExtra("position", -1L)
+            if (posMs < 0) posMs = data.getIntExtra("position", -1).toLong()
+            if (posMs < 0) posMs = data.getLongExtra("extra_position", -1L)
+            if (posMs < 0) posMs = data.getIntExtra("com.mxtech.intent.result.position", -1).toLong()
+
+            durMs = data.getLongExtra("duration", -1L)
+            if (durMs < 0) durMs = data.getIntExtra("duration", -1).toLong()
+            if (durMs < 0) durMs = data.getLongExtra("extra_duration", -1L)
+            if (durMs < 0) durMs = data.getIntExtra("com.mxtech.intent.result.duration", -1).toLong()
+        }
+
+        if (posMs > 10000 && durMs > 0) {
+            val pct = ((posMs * 100) / durMs).toInt().coerceIn(0, 100)
+            val updated = file.copy(watchPct = pct)
+            allReco = allReco.mapValues { (_, files) ->
+                files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
+            }
+            rebuildRows()
+            lifecycleScope.launch {
+                ApiClient.saveRecoWatchPosition(file.user, file.filename, posMs, durMs)
+            }
         }
     }
 
@@ -132,6 +246,14 @@ class RecoFragment : RowsSupportFragment(),
             } catch (_: Exception) {}
         }
 
+        items.add(if (file.isFav) "💚  Unfavorite" else "🤍  Favorite")
+        actions.add { toggleRecoFav(file) }
+
+        if (file.watchPct > 0) {
+            items.add("🔄  Clear progress (${file.watchPct}%)")
+            actions.add { clearProgress(file) }
+        }
+
         items.add("🗑  Delete")
         actions.add { confirmDelete(file) }
 
@@ -141,6 +263,34 @@ class RecoFragment : RowsSupportFragment(),
             .setItems(items.toTypedArray()) { _, which -> actions[which]() }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun toggleRecoFav(file: RecoFile) {
+        lifecycleScope.launch {
+            val newFav = ApiClient.toggleRecoFav(file.user, file.filename)
+            if (!isAdded) return@launch
+            val updated = file.copy(isFav = newFav)
+            allReco = allReco.mapValues { (_, files) ->
+                files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
+            }
+            rebuildRows()
+            Toast.makeText(requireContext(),
+                if (newFav) "Added to favorites" else "Removed from favorites",
+                Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun clearProgress(file: RecoFile) {
+        lifecycleScope.launch {
+            ApiClient.deleteRecoWatchPosition(file.user, file.filename)
+            if (!isAdded) return@launch
+            val updated = file.copy(watchPct = 0)
+            allReco = allReco.mapValues { (_, files) ->
+                files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
+            }
+            rebuildRows()
+            Toast.makeText(requireContext(), "Progress cleared", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun confirmDelete(file: RecoFile) {
@@ -171,27 +321,8 @@ class RecoFragment : RowsSupportFragment(),
             try {
                 val reco = ApiClient.loadReco()
                 if (!isAdded) return@launch
-                val rowsAdapter = adapter as ArrayObjectAdapter
-                rowsAdapter.clear()
-
-                if (reco.isEmpty()) {
-                    statusText?.text = "No downloaded recordings"
-                    statusText?.visibility = View.VISIBLE
-                    mainAdapter.fragmentHost?.notifyDataReady(mainAdapter)
-                    return@launch
-                }
-
-                statusText?.visibility = View.GONE
-
-                for ((username, files) in reco) {
-                    val headerItem = HeaderItem(username)
-                    val cardAdapter = ArrayObjectAdapter(RecoCardPresenter { file -> showRecoPopup(file) })
-                    for (file in files) {
-                        cardAdapter.add(file)
-                    }
-                    rowsAdapter.add(ListRow(headerItem, cardAdapter))
-                }
-
+                allReco = reco
+                rebuildRows()
                 mainAdapter.fragmentHost?.notifyDataReady(mainAdapter)
             } catch (e: Exception) {
                 if (!isAdded) return@launch

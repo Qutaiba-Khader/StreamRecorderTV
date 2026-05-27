@@ -5,7 +5,7 @@
 Native Android TV Leanback app for StreamRecorder — a TikTok recording manager. Companion to the Web SPA (CT 112, port 5001) and Mobile phone app (repo `streamrecorder-home-mobile`).
 
 - **Package**: `com.streamrecorder.tvapp`
-- **Current version**: 4.0.2 (versionCode 7)
+- **Current version**: 4.0.3 (versionCode 8)
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ pct exec 200 -- bash -c 'cd /root/StreamRecorderTV.old && ./gradlew assembleRele
 ### Deploy APK
 ```bash
 pct exec 200 -- cp /root/StreamRecorderTV.old/app/build/outputs/apk/release/app-release.apk \
-  /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.2.apk
+  /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.3.apk
 ```
 
 ### Install on Google TV Streamer (192.168.1.222) via CT 126
@@ -42,8 +42,8 @@ pct exec 126 -- adb -s 192.168.1.222:5555 install -r /tmp/tv.apk
 
 ### GitHub Release
 ```bash
-pct exec 200 -- gh release create v4.0.2 /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.2.apk \
-  --repo Qutaiba-Khader/StreamRecorderTV --title "StreamRecorder TV v4.0.2" --notes "Release notes"
+pct exec 200 -- gh release create v4.0.3 /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.3.apk \
+  --repo Qutaiba-Khader/StreamRecorderTV --title "StreamRecorder TV v4.0.3" --notes "Release notes"
 ```
 
 ## Architecture

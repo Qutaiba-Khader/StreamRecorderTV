@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.leanback.widget.Presenter
 import com.bumptech.glide.Glide
@@ -156,18 +157,121 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         val isFav = item is Recording && item.isFav
         val normalBg = if (isFav) Color.parseColor("#1A2E1A") else t.cardBg
         val focusBg = if (isFav) Color.parseColor("#2A4A2A") else Color.parseColor("#2A2A4A")
-        bg?.setColor(normalBg)
+        if (item !is LiveStreamCard || item.streams.isNotEmpty()) {
+            bg?.setColor(normalBg)
+        }
 
         root.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
             val scale = if (hasFocus) 1.12f else 1.0f
             root.elevation = if (hasFocus) 8 * d else 0f
             root.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
-            bg?.setColor(if (hasFocus) focusBg else normalBg)
+            if (item !is LiveStreamCard) {
+                bg?.setColor(if (hasFocus) focusBg else normalBg)
+            }
         }
 
         root.setOnLongClickListener {
             onLongClick?.invoke(item)
             true
+        }
+    }
+
+    private fun bindLiveCard(
+        root: LinearLayout, bg: GradientDrawable?,
+        thumbContainer: FrameLayout, thumbImage: ImageView, durText: TextView,
+        titleText: TextView, metaRow: LinearLayout,
+        card: LiveStreamCard, d: Float, t: ThemeColors
+    ) {
+        val ctx = root.context
+        val isLoading = card.streams.isEmpty()
+
+        bg?.setColor(Color.parseColor("#CC1A0000"))
+
+        thumbImage.setImageDrawable(null)
+        thumbImage.setBackgroundColor(Color.parseColor("#331A0000"))
+
+        while (thumbContainer.childCount > 2) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
+
+        if (isLoading) {
+            val loadingContainer = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            val spinner = ProgressBar(ctx).apply {
+                isIndeterminate = true
+                val size = (40 * d).toInt()
+                layoutParams = LinearLayout.LayoutParams(size, size)
+                indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#FF4444"))
+            }
+            loadingContainer.addView(spinner)
+            val loadingLabel = TextView(ctx).apply {
+                text = "LIVE"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.parseColor("#FF4444"))
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (6 * d).toInt() }
+            }
+            loadingContainer.addView(loadingLabel)
+            thumbContainer.addView(loadingContainer)
+        } else {
+            val liveOverlay = TextView(ctx).apply {
+                text = "LIVE"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                setTextColor(Color.parseColor("#FF4444"))
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            thumbContainer.addView(liveOverlay)
+        }
+
+        durText.visibility = View.GONE
+
+        titleText.text = card.title.ifEmpty { "${card.streamerName} LIVE" }
+        titleText.setTextColor(Color.parseColor("#FF6666"))
+
+        metaRow.removeAllViews()
+        if (isLoading) {
+            val loadingText = TextView(ctx).apply {
+                text = "Loading stream..."
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setTextColor(Color.parseColor("#FF6666"))
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            metaRow.addView(loadingText)
+        } else {
+            card.streams.keys.take(3).forEach { quality ->
+                val pillBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#33FF4444"))
+                    cornerRadius = 3 * d
+                }
+                val pill = TextView(ctx).apply {
+                    text = quality
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                    setTextColor(Color.parseColor("#FF6666"))
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    background = pillBg
+                    val ph = (5 * d).toInt()
+                    val pv = (1 * d).toInt()
+                    setPadding(ph, pv, ph, pv)
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { marginEnd = (5 * d).toInt() }
+                }
+                metaRow.addView(pill)
+            }
         }
     }
 
@@ -220,62 +324,6 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
             setPadding(ph, pv, ph, pv)
         }
         metaRow.addView(pill)
-    }
-
-    private fun bindLiveCard(
-        root: LinearLayout, bg: GradientDrawable?,
-        thumbContainer: FrameLayout, thumbImage: ImageView, durText: TextView,
-        titleText: TextView, metaRow: LinearLayout,
-        card: LiveStreamCard, d: Float, t: ThemeColors
-    ) {
-        val ctx = root.context
-        bg?.setColor(Color.parseColor("#CC1A0000"))
-
-        thumbImage.setImageDrawable(null)
-        thumbImage.setBackgroundColor(Color.parseColor("#331A0000"))
-
-        while (thumbContainer.childCount > 2) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
-
-        val liveOverlay = TextView(ctx).apply {
-            text = "LIVE"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-            setTextColor(Color.parseColor("#FF4444"))
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        }
-        thumbContainer.addView(liveOverlay)
-
-        durText.visibility = View.GONE
-
-        titleText.text = card.title.ifEmpty { "${card.streamerName} LIVE" }
-        titleText.setTextColor(Color.parseColor("#FF6666"))
-
-        metaRow.removeAllViews()
-        card.streams.keys.take(3).forEach { quality ->
-            val pillBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#33FF4444"))
-                cornerRadius = 3 * d
-            }
-            val pill = TextView(ctx).apply {
-                text = quality
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-                setTextColor(Color.parseColor("#FF6666"))
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                background = pillBg
-                val ph = (5 * d).toInt()
-                val pv = (1 * d).toInt()
-                setPadding(ph, pv, ph, pv)
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { marginEnd = (5 * d).toInt() }
-            }
-            metaRow.addView(pill)
-        }
     }
 
     private fun bindRecording(

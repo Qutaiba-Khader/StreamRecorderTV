@@ -537,8 +537,11 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                             streams = liveData.streams,
                             streamerName = streamerName
                         )
-                        if (gridAdapter.size() > 0 && gridAdapter.get(0) is LiveStreamCard) {
-                            gridAdapter.replace(0, liveCard!!)
+                        val livePos = (0 until gridAdapter.size()).firstOrNull {
+                            gridAdapter.get(it) is LiveStreamCard
+                        }
+                        if (livePos != null) {
+                            gridAdapter.replace(livePos, liveCard!!)
                         }
                     }
                 }

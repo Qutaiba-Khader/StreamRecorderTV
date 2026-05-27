@@ -172,6 +172,24 @@ class RecoFragment : RowsSupportFragment(),
         }
     }
 
+    private fun updateSingleCard(oldFile: RecoFile, newFile: RecoFile) {
+        allReco = allReco.mapValues { (_, files) ->
+            files.map { if (it.user == oldFile.user && it.filename == oldFile.filename) newFile else it }
+        }
+        val rowsAdapter = adapter as? ArrayObjectAdapter ?: return
+        for (i in 0 until rowsAdapter.size()) {
+            val listRow = rowsAdapter.get(i) as? ListRow ?: continue
+            val cardAdapter = listRow.adapter as? ArrayObjectAdapter ?: continue
+            for (j in 0 until cardAdapter.size()) {
+                val file = cardAdapter.get(j) as? RecoFile ?: continue
+                if (file.user == oldFile.user && file.filename == oldFile.filename) {
+                    cardAdapter.replace(j, newFile)
+                    return
+                }
+            }
+        }
+    }
+
     private fun playRecoFile(file: RecoFile) {
         if (!isAdded) return
         playingFile = file
@@ -215,10 +233,7 @@ class RecoFragment : RowsSupportFragment(),
         if (posMs > 10000 && durMs > 0) {
             val pct = ((posMs * 100) / durMs).toInt().coerceIn(0, 100)
             val updated = file.copy(watchPct = pct)
-            allReco = allReco.mapValues { (_, files) ->
-                files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
-            }
-            rebuildRows()
+            updateSingleCard(file, updated)
             lifecycleScope.launch {
                 ApiClient.saveRecoWatchPosition(file.user, file.filename, posMs, durMs)
             }
@@ -270,10 +285,14 @@ class RecoFragment : RowsSupportFragment(),
             val newFav = ApiClient.toggleRecoFav(file.user, file.filename)
             if (!isAdded) return@launch
             val updated = file.copy(isFav = newFav)
-            allReco = allReco.mapValues { (_, files) ->
-                files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
+            if (favOnly && !newFav) {
+                allReco = allReco.mapValues { (_, files) ->
+                    files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
+                }
+                rebuildRows()
+            } else {
+                updateSingleCard(file, updated)
             }
-            rebuildRows()
             Toast.makeText(requireContext(),
                 if (newFav) "Added to favorites" else "Removed from favorites",
                 Toast.LENGTH_SHORT).show()
@@ -285,10 +304,7 @@ class RecoFragment : RowsSupportFragment(),
             ApiClient.deleteRecoWatchPosition(file.user, file.filename)
             if (!isAdded) return@launch
             val updated = file.copy(watchPct = 0)
-            allReco = allReco.mapValues { (_, files) ->
-                files.map { if (it.user == file.user && it.filename == file.filename) updated else it }
-            }
-            rebuildRows()
+            updateSingleCard(file, updated)
             Toast.makeText(requireContext(), "Progress cleared", Toast.LENGTH_SHORT).show()
         }
     }

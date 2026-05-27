@@ -98,10 +98,6 @@ object ApiClient {
         }.also { recordingsCache[targetId] = it }
     }
 
-    fun countPostprocessing(targetId: Int): Int {
-        return recordingsCache[targetId]?.size?.let { 0 } ?: 0
-    }
-
     private fun parseRecordings(raw: String): List<Recording> {
         val json = JSONObject(raw)
         val arr = json.getJSONArray("data")
@@ -150,17 +146,6 @@ object ApiClient {
                 watchPercentage = watchPct
             )
         }
-    }
-
-    fun countPostprocessingRecordings(targetId: Int, raw: String? = null): Int {
-        val jsonStr = raw ?: return 0
-        return try {
-            val json = JSONObject(jsonStr)
-            val arr = json.getJSONArray("data")
-            (0 until arr.length()).count { i ->
-                arr.getJSONObject(i).optString("status") == "postprocessing"
-            }
-        } catch (_: Exception) { 0 }
     }
 
     suspend fun loadRecordingsRaw(targetId: Int): String = withContext(Dispatchers.IO) {
@@ -257,7 +242,7 @@ object ApiClient {
 
     fun recoPlayUrl(user: String, filename: String): String {
         val base = activeBase ?: LOCAL_BASE
-        return "$base/reco/play/${java.net.URLEncoder.encode(user, "UTF-8")}/${java.net.URLEncoder.encode(filename, "UTF-8")}"
+        return "$base/reco/play/${URLEncoder.encode(user, "UTF-8").replace("+", "%20")}/${URLEncoder.encode(filename, "UTF-8").replace("+", "%20")}"
     }
 
     fun recoThumbUrl(relativePath: String): String {
@@ -267,7 +252,8 @@ object ApiClient {
 
     suspend fun deleteRecoFile(user: String, filename: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val json = post("/api/reco/delete", """{"user":"$user","filename":"$filename"}""")
+            val body = JSONObject().apply { put("user", user); put("filename", filename) }
+            val json = post("/api/reco/delete", body.toString())
             json.optBoolean("ok", false)
         } catch (_: Exception) { false }
     }
@@ -330,19 +316,22 @@ object ApiClient {
         try {
             val posSec = positionMs / 1000.0
             val durSec = durationMs / 1000.0
-            post("/api/reco/watch-position", """{"user":"$user","filename":"$filename","position":$posSec,"duration":$durSec}""")
+            val body = JSONObject().apply { put("user", user); put("filename", filename); put("position", posSec); put("duration", durSec) }
+            post("/api/reco/watch-position", body.toString())
         } catch (_: Exception) {}
     }
 
     suspend fun deleteRecoWatchPosition(user: String, filename: String) = withContext(Dispatchers.IO) {
         try {
-            post("/api/reco/watch-position/delete", """{"user":"$user","filename":"$filename"}""")
+            val body = JSONObject().apply { put("user", user); put("filename", filename) }
+            post("/api/reco/watch-position/delete", body.toString())
         } catch (_: Exception) {}
     }
 
     suspend fun toggleRecoFav(user: String, filename: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val json = post("/api/reco/fav", """{"user":"$user","filename":"$filename"}""")
+            val body = JSONObject().apply { put("user", user); put("filename", filename) }
+            val json = post("/api/reco/fav", body.toString())
             json.optBoolean("is_fav", false)
         } catch (_: Exception) { false }
     }

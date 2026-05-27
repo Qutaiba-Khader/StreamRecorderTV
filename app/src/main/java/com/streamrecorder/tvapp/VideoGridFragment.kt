@@ -304,6 +304,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     }
 
     private fun showLiveContextMenu(card: LiveStreamCard) {
+        if (!isAdded) return
         if (card.streams.isEmpty()) {
             Toast.makeText(requireContext(), "Loading stream...", Toast.LENGTH_SHORT).show()
             return
@@ -401,6 +402,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     }
 
     private fun openLiveStream(card: LiveStreamCard) {
+        if (!isAdded) return
         if (card.streams.isEmpty()) {
             Toast.makeText(requireContext(), "Loading stream...", Toast.LENGTH_SHORT).show()
             return
@@ -481,6 +483,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     }
 
     private fun launchSystemPicker(url: String) {
+        if (!isAdded) return
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(url), "video/*")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

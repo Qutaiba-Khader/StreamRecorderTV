@@ -90,6 +90,7 @@ class MainFragment : BrowseSupportFragment() {
         lifecycleScope.launch {
             try {
                 val targets = ApiClient.loadTargets()
+                if (!isAdded) return@launch
                 setTargetsAdapter(targets)
                 ApiClient.cachedTargetsJson?.let { AppPreferences.cachedTargetsJson = it }
                 ChannelHelper.updateLiveChannel(requireContext(), targets)

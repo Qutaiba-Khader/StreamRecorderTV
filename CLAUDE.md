@@ -5,7 +5,7 @@
 Native Android TV Leanback app for StreamRecorder — a TikTok recording manager. Companion to the Web SPA (CT 112, port 5001) and Mobile phone app (repo `streamrecorder-home-mobile`).
 
 - **Package**: `com.streamrecorder.tvapp`
-- **Current version**: 4.0.0 (versionCode 5)
+- **Current version**: 4.0.1 (versionCode 6)
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ pct exec 200 -- bash -c 'cd /root/StreamRecorderTV.old && ./gradlew assembleRele
 ### Deploy APK
 ```bash
 pct exec 200 -- cp /root/StreamRecorderTV.old/app/build/outputs/apk/release/app-release.apk \
-  /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.0.apk
+  /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.1.apk
 ```
 
 ### Install on Google TV Streamer (192.168.1.222) via CT 126
@@ -42,8 +42,8 @@ pct exec 126 -- adb -s 192.168.1.222:5555 install -r /tmp/tv.apk
 
 ### GitHub Release
 ```bash
-pct exec 200 -- gh release create v4.0.0 /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.0.apk \
-  --repo Qutaiba-Khader/StreamRecorderTV --title "StreamRecorder TV v4.0.0" --notes "Release notes"
+pct exec 200 -- gh release create v4.0.1 /mnt/Shared1Tb/public/tvapp/StreamRecorder-TV-v4.0.1.apk \
+  --repo Qutaiba-Khader/StreamRecorderTV --title "StreamRecorder TV v4.0.1" --notes "Release notes"
 ```
 
 ## Architecture
@@ -55,7 +55,7 @@ app/src/main/java/com/streamrecorder/tvapp/
 ├── VideoGridFragment.kt     # 3-col grid, header, fav filter, live/processing cards, player launch, download
 ├── SettingsFragment.kt      # 3-col settings grid, AlertDialog pickers
 ├── HiddenFragment.kt        # Hidden sources grid, click to unhide
-├── RecoFragment.kt          # Downloads page — horizontal rows per user, play/delete support
+├── RecoFragment.kt          # Downloads page — rows per user, play/fav/progress/delete, in-place card updates
 ├── RecoCardPresenter.kt     # Download card with thumbnail, date, resolution, size
 ├── ChannelHelper.kt         # TvProvider "Live Now" preview channel management
 ├── CardPresenter.kt         # Card views: recordings, live (spinner), post-processing (yellow)
@@ -86,6 +86,9 @@ Backend is the StreamRecorder SPA server on CT 112 (192.168.1.31:5001).
 | `/api/download/check` | POST | Check download status |
 | `/api/reco` | GET | List all downloaded files grouped by user |
 | `/api/reco/delete` | POST | Delete a downloaded file |
+| `/api/reco/fav` | POST | Toggle favorite on downloaded file |
+| `/api/reco/watch-position` | POST | Save watch position for downloaded file |
+| `/api/reco/watch-position/delete` | POST | Clear watch position for downloaded file |
 | `/reco/thumb/{user}/{file}` | GET | Thumbnail for downloaded file (generated via ffmpeg, cached) |
 | `/reco/play/{user}/{file}` | GET | Stream downloaded file (HTTP range support) |
 | `/play/{id}?res={res}` | GET | 301 redirect to CDN |
@@ -95,7 +98,7 @@ Failover: tries local `192.168.1.31:5001` first (2s timeout), falls back to `str
 ## Key Behaviors
 
 - **Pin feature**: Long-click sidebar streamer → popup with Refresh/Pin. Pinned users sort above live users with 📌 prefix. Synced to server via settings API
-- **Downloads page**: "📂 Downloads" sidebar section with horizontal rows per user. Cards show ffmpeg-generated thumbnails. Click to play, long-click for play/open-with/delete
+- **Downloads page**: "📂 Downloads" sidebar section with horizontal rows per user. Cards show ffmpeg-generated thumbnails, fav badge, watch progress bar. Click to play, long-click for play/open-with/fav/clear-progress/delete. In-place card updates (no focus loss on player return)
 - **Live Now channel**: TvProvider preview channel showing live streamers on launcher home screen
 - **Download to SMB**: Long-click recording card → download per resolution. Server-side aria2c downloads to `/mnt/Reco/@username/`. Status check on download click (not on popup open, for speed)
 - **Post-processing**: Yellow 🟡 dot in sidebar, yellow non-clickable PostProcessingCard in grid

@@ -59,10 +59,12 @@ class HiddenFragment : VerticalGridSupportFragment(),
         lifecycleScope.launch {
             try {
                 ApiClient.unhideSource(hidden.recId, hidden.res)
+                if (!isAdded) return@launch
                 AppPreferences.removeHidden(hidden.recId, hidden.res)
                 loadHidden()
                 Toast.makeText(requireContext(), "Unhidden ${hidden.res}p", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
+                if (!isAdded) return@launch
                 Toast.makeText(requireContext(), "Error unhiding source", Toast.LENGTH_SHORT).show()
             }
         }

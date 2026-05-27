@@ -3,6 +3,8 @@ package com.streamrecorder.tvapp
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class ThemeColors(
     val brand: Int,
@@ -110,6 +112,64 @@ object AppPreferences {
     var cardSize: String
         get() = prefs.getString("cardSize", "Medium") ?: "Medium"
         set(value) = prefs.edit().putString("cardSize", value).apply()
+
+    private val featureKeys = listOf(
+        "hdThumbnails", "showViewerCount", "showDeletionCountdown"
+    )
+
+    var hdThumbnails: Boolean
+        get() = prefs.getBoolean("hdThumbnails", false)
+        set(value) = prefs.edit().putBoolean("hdThumbnails", value).apply()
+
+    var showViewerCount: Boolean
+        get() = prefs.getBoolean("showViewerCount", false)
+        set(value) = prefs.edit().putBoolean("showViewerCount", value).apply()
+
+    var showDeletionCountdown: Boolean
+        get() = prefs.getBoolean("showDeletionCountdown", false)
+        set(value) = prefs.edit().putBoolean("showDeletionCountdown", value).apply()
+
+    fun getFullSettings(): JSONObject {
+        val json = JSONObject()
+        for (key in featureKeys) {
+            json.put(key, prefs.getBoolean(key, false))
+        }
+        val pinned = getPinnedUsers()
+        val arr = JSONArray()
+        pinned.forEach { arr.put(it) }
+        json.put("pinnedUsers", arr)
+        return json
+    }
+
+    fun applyServerSettings(remote: JSONObject) {
+        val editor = prefs.edit()
+        for (key in featureKeys) {
+            if (remote.has(key)) editor.putBoolean(key, remote.optBoolean(key, false))
+        }
+        if (remote.has("pinnedUsers")) {
+            val arr = remote.optJSONArray("pinnedUsers")
+            if (arr != null) {
+                val set = (0 until arr.length()).map { arr.getInt(it).toString() }.toSet()
+                editor.putStringSet("pinned_users", set)
+            }
+        }
+        editor.apply()
+    }
+
+    fun getPinnedUsers(): Set<Int> {
+        val set = prefs.getStringSet("pinned_users", emptySet()) ?: emptySet()
+        return set.mapNotNull { it.toIntOrNull() }.toSet()
+    }
+
+    fun isPinned(targetId: Int): Boolean = getPinnedUsers().contains(targetId)
+
+    fun togglePin(targetId: Int): Boolean {
+        val set = prefs.getStringSet("pinned_users", mutableSetOf())!!.toMutableSet()
+        val idStr = targetId.toString()
+        val nowPinned = if (set.contains(idStr)) { set.remove(idStr); false } else { set.add(idStr); true }
+        prefs.edit().putStringSet("pinned_users", set).apply()
+        return nowPinned
+    }
 
     fun saveWatchPosition(recId: Int, position: Long, duration: Long) {
         if (duration <= 0) return

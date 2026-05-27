@@ -83,7 +83,8 @@ object ApiClient {
                 latestTs = o.optLong("latest_ts", 0)
             )
         }.sortedWith(
-            compareByDescending<Target> { it.isLive }
+            compareByDescending<Target> { AppPreferences.isPinned(it.id) }
+                .thenByDescending { it.isLive }
                 .thenByDescending { it.isPostprocessing }
                 .thenByDescending { it.latestTs }
         )
@@ -114,7 +115,9 @@ object ApiClient {
                 Source(
                     resolution = s.optInt("resolution", 0),
                     filesize = s.optLong("filesize", 0),
-                    downloadlink = s.optString("downloadlink", "")
+                    downloadlink = s.optString("downloadlink", ""),
+                    deletionTimeHr = s.optString("deletiontime_hr", null).takeIf { !it.isNullOrEmpty() },
+                    deletionTime = s.optLong("deletiontime", 0)
                 )
             }
             if (sourceList.isEmpty()) return@mapNotNull null
@@ -142,6 +145,8 @@ object ApiClient {
                 isFav = o.optBoolean("is_fav", false),
                 posterSmall270 = o.optString("poster_small_270", null).takeIf { !it.isNullOrEmpty() },
                 posterSmall192 = o.optString("poster_small_192", null).takeIf { !it.isNullOrEmpty() },
+                thumbLarge = o.optString("thumb_large", null).takeIf { !it.isNullOrEmpty() },
+                maxViewerCount = o.optInt("max_viewercount", 0),
                 watchPercentage = watchPct
             )
         }
@@ -248,6 +253,75 @@ object ApiClient {
     fun playUrl(recId: Int, res: Int): String {
         val base = activeBase ?: LOCAL_BASE
         return "$base/play/$recId?res=$res"
+    }
+
+    fun recoPlayUrl(user: String, filename: String): String {
+        val base = activeBase ?: LOCAL_BASE
+        return "$base/reco/play/${java.net.URLEncoder.encode(user, "UTF-8")}/${java.net.URLEncoder.encode(filename, "UTF-8")}"
+    }
+
+    fun recoThumbUrl(relativePath: String): String {
+        val base = activeBase ?: LOCAL_BASE
+        return "$base$relativePath"
+    }
+
+    suspend fun deleteRecoFile(user: String, filename: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val json = post("/api/reco/delete", """{"user":"$user","filename":"$filename"}""")
+            json.optBoolean("ok", false)
+        } catch (_: Exception) { false }
+    }
+
+    suspend fun loadSettings(): JSONObject = withContext(Dispatchers.IO) {
+        try {
+            JSONObject(get("/api/settings"))
+        } catch (_: Exception) { JSONObject() }
+    }
+
+    suspend fun saveSettings(settings: JSONObject) = withContext(Dispatchers.IO) {
+        try {
+            post("/api/settings", settings.toString())
+        } catch (_: Exception) {}
+    }
+
+    suspend fun startDownload(recId: Int, res: Int): String = withContext(Dispatchers.IO) {
+        try {
+            val json = post("/api/download", """{"rec_id":$recId,"res":$res}""")
+            json.optString("status", "error")
+        } catch (_: Exception) { "error" }
+    }
+
+    suspend fun checkDownload(recId: Int, res: Int): JSONObject = withContext(Dispatchers.IO) {
+        try {
+            post("/api/download/check", """{"rec_id":$recId,"res":$res}""")
+        } catch (_: Exception) { JSONObject().apply { put("status", "error") } }
+    }
+
+    suspend fun loadReco(): Map<String, List<RecoFile>> = withContext(Dispatchers.IO) {
+        try {
+            val raw = get("/api/reco")
+            val json = JSONObject(raw)
+            val result = linkedMapOf<String, List<RecoFile>>()
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val user = keys.next()
+                val arr = json.getJSONArray(user)
+                val files = (0 until arr.length()).map { i ->
+                    val o = arr.getJSONObject(i)
+                    RecoFile(
+                        filename = o.getString("filename"),
+                        size = o.optLong("size", 0),
+                        resolution = if (o.isNull("resolution")) null else o.optInt("resolution"),
+                        date = o.optString("date", null).takeIf { it != "null" && !it.isNullOrEmpty() },
+                        user = o.optString("user", user),
+                        thumbUrl = o.optString("thumb_url", null).takeIf { !it.isNullOrEmpty() },
+                        playUrl = o.optString("play_url", null).takeIf { !it.isNullOrEmpty() }
+                    )
+                }
+                result[user] = files
+            }
+            result
+        } catch (_: Exception) { emptyMap() }
     }
 
     fun clearCache() {

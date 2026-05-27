@@ -1,6 +1,8 @@
 package com.streamrecorder.tvapp
 
 import android.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.os.Bundle
 import android.widget.Toast
 import androidx.leanback.app.BrowseSupportFragment
@@ -46,7 +48,21 @@ class SettingsFragment : VerticalGridSupportFragment(),
                 "trackPosition" -> {
                     AppPreferences.trackPosition = !AppPreferences.trackPosition
                     refreshSettings()
-                    Toast.makeText(requireContext(), "Track Position: ${if (AppPreferences.trackPosition) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
+                }
+                "hdThumbnails" -> {
+                    AppPreferences.hdThumbnails = !AppPreferences.hdThumbnails
+                    refreshSettings()
+                    pushSettings()
+                }
+                "showViewerCount" -> {
+                    AppPreferences.showViewerCount = !AppPreferences.showViewerCount
+                    refreshSettings()
+                    pushSettings()
+                }
+                "showDeletionCountdown" -> {
+                    AppPreferences.showDeletionCountdown = !AppPreferences.showDeletionCountdown
+                    refreshSettings()
+                    pushSettings()
                 }
                 "hiddenSources" -> {
                     Toast.makeText(requireContext(), "Manage hidden sources on the web app", Toast.LENGTH_SHORT).show()
@@ -65,14 +81,37 @@ class SettingsFragment : VerticalGridSupportFragment(),
     }
 
     private fun refreshSettings() {
+        val focusedPos = gridAdapter.size().let { size ->
+            if (size == 0) -1
+            else {
+                val grid = view?.findViewById<androidx.leanback.widget.VerticalGridView>(
+                    androidx.leanback.R.id.browse_grid
+                )
+                grid?.selectedPosition ?: -1
+            }
+        }
+
         gridAdapter.clear()
         gridAdapter.add(SettingsItem("player", "Default Player", AppPreferences.defaultPlayer))
         gridAdapter.add(SettingsItem("resolution", "Preferred Resolution", AppPreferences.preferredResolution))
         gridAdapter.add(SettingsItem("theme", "Theme", AppPreferences.theme))
         gridAdapter.add(SettingsItem("cardSize", "Card Size", AppPreferences.cardSize))
         gridAdapter.add(SettingsItem("trackPosition", "Track Watch Position", if (AppPreferences.trackPosition) "ON" else "OFF"))
+        gridAdapter.add(SettingsItem("hdThumbnails", "HD Thumbnails", if (AppPreferences.hdThumbnails) "ON" else "OFF"))
+        gridAdapter.add(SettingsItem("showViewerCount", "Viewer Count Badge", if (AppPreferences.showViewerCount) "ON" else "OFF"))
+        gridAdapter.add(SettingsItem("showDeletionCountdown", "Deletion Countdown", if (AppPreferences.showDeletionCountdown) "ON" else "OFF"))
         gridAdapter.add(SettingsItem("hiddenSources", "Hidden Sources", "Web app only"))
         gridAdapter.add(SettingsItem("refresh", "Refresh Data", "Clear cache & reload"))
+
+        if (focusedPos in 0 until gridAdapter.size()) {
+            view?.findViewById<androidx.leanback.widget.VerticalGridView>(
+                androidx.leanback.R.id.browse_grid
+            )?.post {
+                view?.findViewById<androidx.leanback.widget.VerticalGridView>(
+                    androidx.leanback.R.id.browse_grid
+                )?.selectedPosition = focusedPos
+            }
+        }
     }
 
     private fun showPicker(title: String, options: List<String>, current: String, onSelect: (String) -> Unit) {
@@ -86,6 +125,12 @@ class SettingsFragment : VerticalGridSupportFragment(),
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun pushSettings() {
+        lifecycleScope.launch {
+            ApiClient.saveSettings(AppPreferences.getFullSettings())
+        }
     }
 
     private fun applyTheme() {

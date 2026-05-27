@@ -1,5 +1,6 @@
 package com.streamrecorder.tvapp
 
+import android.app.AlertDialog
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -18,6 +19,7 @@ import kotlinx.coroutines.launch
 class MainFragment : BrowseSupportFragment() {
     companion object {
         const val SETTINGS_ID = -1L
+        const val RECO_ID = -3L
         const val HIDDEN_ID = -2L
     }
 
@@ -35,7 +37,7 @@ class MainFragment : BrowseSupportFragment() {
         title = ""
 
         setHeaderPresenterSelector(object : PresenterSelector() {
-            private val presenter = HeaderPresenter { targetId -> refreshTarget(targetId) }
+            private val presenter = HeaderPresenter { targetId -> showStreamerPopup(targetId) }
             override fun getPresenter(item: Any?): Presenter = presenter
         })
 
@@ -49,6 +51,18 @@ class MainFragment : BrowseSupportFragment() {
         }
 
         loadTargets()
+        syncSettings()
+    }
+
+    private fun syncSettings() {
+        lifecycleScope.launch {
+            try {
+                val remote = ApiClient.loadSettings()
+                if (remote.length() > 0) {
+                    AppPreferences.applyServerSettings(remote)
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -62,10 +76,12 @@ class MainFragment : BrowseSupportFragment() {
         targets.forEach { t ->
             val header = StreamerHeaderItem(
                 t.id.toLong(), t.name, t.logo, t.isLive,
-                t.isPostprocessing, t.platform, t.countTotal
+                t.isPostprocessing, AppPreferences.isPinned(t.id),
+                t.platform, t.countTotal
             )
             rowsAdapter.add(PageRow(header))
         }
+        rowsAdapter.add(PageRow(HeaderItem(RECO_ID, "Downloads")))
         rowsAdapter.add(PageRow(HeaderItem(HIDDEN_ID, "Hidden")))
         adapter = rowsAdapter
     }
@@ -76,6 +92,7 @@ class MainFragment : BrowseSupportFragment() {
                 val targets = ApiClient.loadTargets()
                 setTargetsAdapter(targets)
                 ApiClient.cachedTargetsJson?.let { AppPreferences.cachedTargetsJson = it }
+                ChannelHelper.updateLiveChannel(requireContext(), targets)
             } catch (e: Exception) {
                 Log.e("StreamRecMain", "loadTargets failed", e)
             }
@@ -87,9 +104,34 @@ class MainFragment : BrowseSupportFragment() {
         loadTargets()
     }
 
-    private fun refreshTarget(targetId: Int) {
-        currentGridFragment?.refreshData()
-        Toast.makeText(requireContext(), "Refreshing...", Toast.LENGTH_SHORT).show()
+    private fun showStreamerPopup(targetId: Int) {
+        val isPinned = AppPreferences.isPinned(targetId)
+        val items = arrayOf("🔄  Refresh", if (isPinned) "📌  Unpin" else "📌  Pin")
+        AlertDialog.Builder(requireContext())
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> {
+                        currentGridFragment?.refreshData()
+                        Toast.makeText(requireContext(), "Refreshing...", Toast.LENGTH_SHORT).show()
+                    }
+                    1 -> {
+                        val nowPinned = AppPreferences.togglePin(targetId)
+                        pushSettings()
+                        refreshAll()
+                        Toast.makeText(requireContext(),
+                            if (nowPinned) "Pinned to top" else "Unpinned",
+                            Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun pushSettings() {
+        lifecycleScope.launch {
+            ApiClient.saveSettings(AppPreferences.getFullSettings())
+        }
     }
 
     inner class GridFragmentFactory : BrowseSupportFragment.FragmentFactory<Fragment>() {
@@ -97,6 +139,7 @@ class MainFragment : BrowseSupportFragment() {
             val pageRow = row as PageRow
             val header = pageRow.headerItem
             if (header.id == SETTINGS_ID) return SettingsFragment()
+            if (header.id == RECO_ID) return RecoFragment()
             if (header.id == HIDDEN_ID) return HiddenFragment()
             val streamerHeader = header as? StreamerHeaderItem
             val fragment = VideoGridFragment.newInstance(

@@ -8,6 +8,7 @@ class StreamerHeaderItem(
     val logoUrl: String?,
     val isLive: Boolean,
     val isPostprocessing: Boolean = false,
+    val isPinned: Boolean = false,
     val platform: String = "tiktok",
     val countTotal: Int = 0
 ) : HeaderItem(id, name)

@@ -243,6 +243,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     }
 
     private fun showRecordingContextMenu(rec: Recording) {
+        if (!isAdded) return
         val ctx = requireContext()
         val sortedSources = rec.sources.sortedByDescending { it.resolution }
         val items = mutableListOf<String>()
@@ -260,6 +261,11 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         actions.add { toggleFav(rec) }
 
         for (src in sortedSources) {
+            items.add("⬇  Download ${src.resolution}p  (${formatSize(src.filesize)})")
+            actions.add { startDownload(rec.id, src.resolution) }
+        }
+
+        for (src in sortedSources) {
             items.add("❌  Hide ${src.resolution}p")
             actions.add { hideSource(rec, src.resolution) }
         }
@@ -269,6 +275,32 @@ class VideoGridFragment : VerticalGridSupportFragment(),
             .setItems(items.toTypedArray()) { _, which -> actions[which]() }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun startDownload(recId: Int, res: Int) {
+        lifecycleScope.launch {
+            if (!isAdded) return@launch
+            val check = ApiClient.checkDownload(recId, res)
+            val dlStatus = check.optString("status", "not_found")
+            when (dlStatus) {
+                "done" -> {
+                    if (isAdded) Toast.makeText(requireContext(), "${res}p already downloaded", Toast.LENGTH_SHORT).show()
+                }
+                "downloading" -> {
+                    if (isAdded) Toast.makeText(requireContext(), "Download in progress...", Toast.LENGTH_SHORT).show()
+                }
+                else -> {
+                    val status = ApiClient.startDownload(recId, res)
+                    if (!isAdded) return@launch
+                    val msg = when (status) {
+                        "started" -> "Download started — ${res}p"
+                        "already_downloading" -> "Already downloading ${res}p..."
+                        else -> "Download error"
+                    }
+                    Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun showLiveContextMenu(card: LiveStreamCard) {
@@ -299,8 +331,10 @@ class VideoGridFragment : VerticalGridSupportFragment(),
 
     private fun toggleFav(rec: Recording) {
         lifecycleScope.launch {
+            if (!isAdded) return@launch
             try {
                 val newFav = ApiClient.toggleFav(rec.id)
+                if (!isAdded) return@launch
                 val updated = rec.copy(isFav = newFav)
                 allRecordings = allRecordings.map { if (it.id == rec.id) updated else it }
                 val pos = (0 until gridAdapter.size()).firstOrNull {
@@ -315,10 +349,12 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                 }
                 val targetId = arguments?.getInt("targetId") ?: return@launch
                 ApiClient.clearCacheFor(targetId)
+                if (!isAdded) return@launch
                 Toast.makeText(requireContext(),
                     if (newFav) "Added to favorites" else "Removed from favorites",
                     Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
+                if (!isAdded) return@launch
                 Toast.makeText(requireContext(), "Error toggling favorite", Toast.LENGTH_SHORT).show()
             }
         }
@@ -327,8 +363,10 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     private fun hideSource(rec: Recording, res: Int) {
         val streamerName = arguments?.getString("streamerName") ?: ""
         lifecycleScope.launch {
+            if (!isAdded) return@launch
             try {
                 ApiClient.hideSource(rec.id, res)
+                if (!isAdded) return@launch
                 AppPreferences.addHidden(rec.id, res, rec.displayDate, streamerName)
                 val pos = (0 until gridAdapter.size()).firstOrNull {
                     (gridAdapter.get(it) as? Recording)?.id == rec.id
@@ -343,8 +381,10 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                 }
                 val targetId = arguments?.getInt("targetId") ?: return@launch
                 ApiClient.clearCacheFor(targetId)
+                if (!isAdded) return@launch
                 Toast.makeText(requireContext(), "${res}p source hidden", Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
+                if (!isAdded) return@launch
                 Toast.makeText(requireContext(), "Error hiding source", Toast.LENGTH_SHORT).show()
             }
         }

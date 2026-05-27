@@ -51,17 +51,18 @@ class HeaderPresenter(private val onLongClick: ((Int) -> Unit)? = null) : RowHea
         val label = row.getChildAt(1) as TextView
 
         if (headerItem is StreamerHeaderItem) {
+            val pinPrefix = if (headerItem.isPinned) "📌 " else ""
             when {
                 headerItem.isLive -> {
-                    label.text = "🔴 ${headerItem.name}"
+                    label.text = "${pinPrefix}🔴 ${headerItem.name}"
                     label.setTextColor(Color.WHITE)
                 }
                 headerItem.isPostprocessing -> {
-                    label.text = "🟡 ${headerItem.name}"
+                    label.text = "${pinPrefix}🟡 ${headerItem.name}"
                     label.setTextColor(Color.parseColor("#FFB300"))
                 }
                 else -> {
-                    label.text = headerItem.name
+                    label.text = "${pinPrefix}${headerItem.name}"
                     label.setTextColor(Color.WHITE)
                 }
             }
@@ -81,6 +82,11 @@ class HeaderPresenter(private val onLongClick: ((Int) -> Unit)? = null) : RowHea
                 onLongClick?.invoke(headerItem.id.toInt())
                 true
             }
+        } else if (headerItem.id == MainFragment.RECO_ID) {
+            label.text = "📂 Downloads"
+            label.setTextColor(Color.parseColor("#66BBFF"))
+            icon.visibility = View.GONE
+            row.setOnLongClickListener(null)
         } else if (headerItem.id == MainFragment.HIDDEN_ID) {
             val count = AppPreferences.getHiddenSources().size
             label.text = "🚫 Hidden ($count)"

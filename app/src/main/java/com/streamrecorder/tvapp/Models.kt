@@ -14,7 +14,9 @@ data class Target(
 data class Source(
     val resolution: Int,
     val filesize: Long,
-    val downloadlink: String
+    val downloadlink: String,
+    val deletionTimeHr: String? = null,
+    val deletionTime: Long = 0
 )
 
 data class Recording(
@@ -26,11 +28,17 @@ data class Recording(
     val isFav: Boolean,
     val posterSmall270: String?,
     val posterSmall192: String?,
+    val thumbLarge: String? = null,
+    val maxViewerCount: Int = 0,
     val watchPercentage: Int = 0
 ) {
     val bestSource: Source? get() = sources.maxByOrNull { it.filesize }
     val thumbnail: String? get() = posterSmall270 ?: posterSmall192
     val displayDate: String get() = recordedAt.replace("T", " ").take(16)
+    val deletionDays: Int? get() {
+        val dt = bestSource?.deletionTime ?: return null
+        return if (dt > 0) (dt / 86400).toInt() else null
+    }
 }
 
 data class LiveStreamData(
@@ -54,4 +62,14 @@ data class HiddenSource(
     val res: Int,
     val date: String,
     val streamer: String
+)
+
+data class RecoFile(
+    val filename: String,
+    val size: Long,
+    val resolution: Int?,
+    val date: String?,
+    val user: String,
+    val thumbUrl: String? = null,
+    val playUrl: String? = null
 )

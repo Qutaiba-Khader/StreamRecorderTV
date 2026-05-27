@@ -138,7 +138,7 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         when (item) {
             is LiveStreamCard -> bindLiveCard(root, bg, thumbContainer, thumbImage, durText, titleText, metaRow, item, d, t)
             is PostProcessingCard -> bindPostProcessingCard(root, bg, thumbContainer, thumbImage, durText, titleText, metaRow, item, d)
-            is Recording -> bindRecording(root, bg, thumbImage, durText, titleText, metaRow, item, d, t)
+            is Recording -> bindRecording(root, bg, thumbContainer, thumbImage, durText, titleText, metaRow, item, d, t)
         }
 
         if (item is PostProcessingCard) {
@@ -186,6 +186,7 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         val isLoading = card.streams.isEmpty()
 
         bg?.setColor(Color.parseColor("#CC1A0000"))
+        bg?.setStroke(0, Color.TRANSPARENT)
 
         thumbImage.setImageDrawable(null)
         thumbImage.setBackgroundColor(Color.parseColor("#331A0000"))
@@ -328,7 +329,7 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
 
     private fun bindRecording(
         root: LinearLayout, bg: GradientDrawable?,
-        thumbImage: ImageView, durText: TextView,
+        thumbContainer: FrameLayout, thumbImage: ImageView, durText: TextView,
         titleText: TextView, metaRow: LinearLayout,
         rec: Recording, d: Float, t: ThemeColors
     ) {
@@ -343,7 +344,6 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         durText.text = rec.durationHr
         durText.visibility = if (rec.durationHr.isNotEmpty()) View.VISIBLE else View.GONE
 
-        val thumbContainer = root.getChildAt(0) as FrameLayout
         while (thumbContainer.childCount > 2) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
 
         if (rec.isFav) {
@@ -367,6 +367,61 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
                 }
             }
             thumbContainer.addView(favIcon)
+        }
+
+        if (AppPreferences.showViewerCount && rec.maxViewerCount > 0) {
+            val vcBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#CC000000"))
+                cornerRadius = 4 * d
+            }
+            val vcText = TextView(ctx).apply {
+                val count = if (rec.maxViewerCount >= 1000) "%.1fK".format(rec.maxViewerCount / 1000f) else rec.maxViewerCount.toString()
+                text = "👁 $count"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setTextColor(Color.parseColor("#CCCCCC"))
+                background = vcBg
+                val ph = (5 * d).toInt()
+                val pv = (2 * d).toInt()
+                setPadding(ph, pv, ph, pv)
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    val m = (6 * d).toInt()
+                    setMargins(m, m, m, m)
+                }
+            }
+            thumbContainer.addView(vcText)
+        }
+
+        if (AppPreferences.showDeletionCountdown) {
+            val days = rec.deletionDays
+            if (days != null && days <= 7) {
+                val delBg = GradientDrawable().apply {
+                    setColor(if (days <= 2) Color.parseColor("#CCFF0000") else Color.parseColor("#CCFF6600"))
+                    cornerRadius = 4 * d
+                }
+                val delText = TextView(ctx).apply {
+                    text = if (days == 0) "< 1d" else "${days}d"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                    setTextColor(Color.WHITE)
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    background = delBg
+                    val ph = (5 * d).toInt()
+                    val pv = (2 * d).toInt()
+                    setPadding(ph, pv, ph, pv)
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        gravity = Gravity.BOTTOM or Gravity.START
+                        val m = (6 * d).toInt()
+                        setMargins(m, m, m, m)
+                    }
+                }
+                thumbContainer.addView(delText)
+            }
         }
 
         val watchPct = if (rec.watchPercentage > 0) rec.watchPercentage else AppPreferences.getWatchPercent(rec.id)
@@ -436,7 +491,8 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
             metaRow.addView(sizeText)
         }
 
-        rec.thumbnail?.let { url ->
+        val thumbUrl = if (AppPreferences.hdThumbnails && rec.thumbLarge != null) rec.thumbLarge else rec.thumbnail
+        thumbUrl?.let { url ->
             Glide.with(ctx)
                 .load(url)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)

@@ -78,10 +78,15 @@ object ApiClient {
                 platform = o.optString("platform", "tiktok"),
                 countTotal = o.optInt("count_total", 0),
                 isLive = o.optBoolean("is_live", false),
+                isPostprocessing = o.optBoolean("is_postprocessing", false),
                 logo = o.optString("logo", null),
                 latestTs = o.optLong("latest_ts", 0)
             )
-        }.sortedWith(compareByDescending<Target> { it.isLive }.thenByDescending { it.latestTs })
+        }.sortedWith(
+            compareByDescending<Target> { it.isLive }
+                .thenByDescending { it.isPostprocessing }
+                .thenByDescending { it.latestTs }
+        )
     }
 
     suspend fun loadRecordings(targetId: Int): List<Recording> {
@@ -92,12 +97,17 @@ object ApiClient {
         }.also { recordingsCache[targetId] = it }
     }
 
+    fun countPostprocessing(targetId: Int): Int {
+        return recordingsCache[targetId]?.size?.let { 0 } ?: 0
+    }
+
     private fun parseRecordings(raw: String): List<Recording> {
         val json = JSONObject(raw)
         val arr = json.getJSONArray("data")
         return (0 until arr.length()).mapNotNull { i ->
             val o = arr.getJSONObject(i)
-            if (o.optString("status") == "running") return@mapNotNull null
+            val status = o.optString("status", "")
+            if (status == "running" || status == "postprocessing") return@mapNotNull null
             val srcs = o.optJSONArray("sources") ?: return@mapNotNull null
             val sourceList = (0 until srcs.length()).map { j ->
                 val s = srcs.getJSONObject(j)
@@ -135,6 +145,21 @@ object ApiClient {
                 watchPercentage = watchPct
             )
         }
+    }
+
+    fun countPostprocessingRecordings(targetId: Int, raw: String? = null): Int {
+        val jsonStr = raw ?: return 0
+        return try {
+            val json = JSONObject(jsonStr)
+            val arr = json.getJSONArray("data")
+            (0 until arr.length()).count { i ->
+                arr.getJSONObject(i).optString("status") == "postprocessing"
+            }
+        } catch (_: Exception) { 0 }
+    }
+
+    suspend fun loadRecordingsRaw(targetId: Int): String = withContext(Dispatchers.IO) {
+        get("/api/recordings/$targetId")
     }
 
     suspend fun loadLiveStream(slug: String): LiveStreamData? = withContext(Dispatchers.IO) {

@@ -51,8 +51,20 @@ class HeaderPresenter(private val onLongClick: ((Int) -> Unit)? = null) : RowHea
         val label = row.getChildAt(1) as TextView
 
         if (headerItem is StreamerHeaderItem) {
-            label.text = if (headerItem.isLive) "🔴 ${headerItem.name}" else headerItem.name
-            label.setTextColor(Color.WHITE)
+            when {
+                headerItem.isLive -> {
+                    label.text = "🔴 ${headerItem.name}"
+                    label.setTextColor(Color.WHITE)
+                }
+                headerItem.isPostprocessing -> {
+                    label.text = "🟡 ${headerItem.name}"
+                    label.setTextColor(Color.parseColor("#FFB300"))
+                }
+                else -> {
+                    label.text = headerItem.name
+                    label.setTextColor(Color.WHITE)
+                }
+            }
             icon.visibility = View.VISIBLE
             val logoUrl = headerItem.logoUrl?.replace("250x250", "56x56")
             if (!logoUrl.isNullOrEmpty() && logoUrl != "null") {

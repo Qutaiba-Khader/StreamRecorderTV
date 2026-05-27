@@ -136,7 +136,21 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
 
         when (item) {
             is LiveStreamCard -> bindLiveCard(root, bg, thumbContainer, thumbImage, durText, titleText, metaRow, item, d, t)
+            is PostProcessingCard -> bindPostProcessingCard(root, bg, thumbContainer, thumbImage, durText, titleText, metaRow, item, d)
             is Recording -> bindRecording(root, bg, thumbImage, durText, titleText, metaRow, item, d, t)
+        }
+
+        if (item is PostProcessingCard) {
+            root.isFocusable = true
+            root.isFocusableInTouchMode = true
+            root.isClickable = false
+            root.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                val scale = if (hasFocus) 1.04f else 1.0f
+                root.elevation = if (hasFocus) 4 * d else 0f
+                root.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
+            }
+            root.setOnLongClickListener(null)
+            return
         }
 
         val isFav = item is Recording && item.isFav
@@ -157,6 +171,57 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         }
     }
 
+    private fun bindPostProcessingCard(
+        root: LinearLayout, bg: GradientDrawable?,
+        thumbContainer: FrameLayout, thumbImage: ImageView, durText: TextView,
+        titleText: TextView, metaRow: LinearLayout,
+        card: PostProcessingCard, d: Float
+    ) {
+        val ctx = root.context
+        bg?.setColor(Color.parseColor("#33FFB300"))
+        bg?.setStroke((2 * d).toInt(), Color.parseColor("#59FFB300"))
+
+        thumbImage.setImageDrawable(null)
+        thumbImage.setBackgroundColor(Color.parseColor("#1A1A0A"))
+
+        while (thumbContainer.childCount > 2) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
+
+        val overlay = TextView(ctx).apply {
+            text = "PROCESSING"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            setTextColor(Color.parseColor("#FFB300"))
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+        thumbContainer.addView(overlay)
+
+        durText.visibility = View.GONE
+
+        titleText.text = "${card.streamerName} — Post-processing"
+        titleText.setTextColor(Color.parseColor("#FFB300"))
+
+        metaRow.removeAllViews()
+        val pillBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#33FFB300"))
+            cornerRadius = 3 * d
+        }
+        val pill = TextView(ctx).apply {
+            text = "● Encoding in progress"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            setTextColor(Color.parseColor("#FFB300"))
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            background = pillBg
+            val ph = (5 * d).toInt()
+            val pv = (1 * d).toInt()
+            setPadding(ph, pv, ph, pv)
+        }
+        metaRow.addView(pill)
+    }
+
     private fun bindLiveCard(
         root: LinearLayout, bg: GradientDrawable?,
         thumbContainer: FrameLayout, thumbImage: ImageView, durText: TextView,
@@ -169,6 +234,8 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         thumbImage.setImageDrawable(null)
         thumbImage.setBackgroundColor(Color.parseColor("#331A0000"))
 
+        while (thumbContainer.childCount > 2) thumbContainer.removeViewAt(thumbContainer.childCount - 1)
+
         val liveOverlay = TextView(ctx).apply {
             text = "LIVE"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
@@ -180,7 +247,6 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         }
-        if (thumbContainer.childCount > 2) thumbContainer.removeViewAt(2)
         thumbContainer.addView(liveOverlay)
 
         durText.visibility = View.GONE
@@ -221,6 +287,7 @@ class CardPresenter(private val onLongClick: ((Any) -> Unit)? = null) : Presente
         val ctx = root.context
 
         bg?.setColor(t.cardBg)
+        bg?.setStroke(0, Color.TRANSPARENT)
 
         titleText.text = rec.displayDate
         titleText.setTextColor(t.textPrimary)

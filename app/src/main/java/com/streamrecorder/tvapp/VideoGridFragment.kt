@@ -39,6 +39,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     private var statusText: TextView? = null
     private var allRecordings: List<Recording> = emptyList()
     private var liveCard: LiveStreamCard? = null
+    private var postProcessingCard: PostProcessingCard? = null
     private var favOnly = false
     private var dataLoaded = false
     private var favButton: TextView? = null
@@ -52,12 +53,14 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     companion object {
         fun newInstance(
             targetId: Int, isLive: Boolean = false,
+            isPostprocessing: Boolean = false,
             streamerName: String = "", logoUrl: String = "",
             platform: String = "tiktok", countTotal: Int = 0
         ) = VideoGridFragment().apply {
             arguments = Bundle().apply {
                 putInt("targetId", targetId)
                 putBoolean("isLive", isLive)
+                putBoolean("isPostprocessing", isPostprocessing)
                 putString("streamerName", streamerName)
                 putString("logoUrl", logoUrl)
                 putString("platform", platform)
@@ -119,6 +122,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         val platform = arguments?.getString("platform") ?: "tiktok"
         val countTotal = arguments?.getInt("countTotal", 0) ?: 0
         val isLive = arguments?.getBoolean("isLive", false) ?: false
+        val isPostprocessing = arguments?.getBoolean("isPostprocessing", false) ?: false
 
         val header = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -167,10 +171,15 @@ class VideoGridFragment : VerticalGridSupportFragment(),
 
         val metaBuilder = StringBuilder("$platform · $countTotal recordings")
         if (isLive) metaBuilder.append(" · LIVE")
+        if (isPostprocessing) metaBuilder.append(" · PROCESSING")
         val metaText = TextView(ctx).apply {
             text = metaBuilder.toString()
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-            setTextColor(if (isLive) Color.parseColor("#FF5555") else t.textSecondary)
+            setTextColor(when {
+                isLive -> Color.parseColor("#FF5555")
+                isPostprocessing -> Color.parseColor("#FFB300")
+                else -> t.textSecondary
+            })
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -217,6 +226,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         onItemViewClickedListener = OnItemViewClickedListener { _, item, _, _ ->
             when (item) {
                 is LiveStreamCard -> openLiveStream(item)
+                is PostProcessingCard -> { /* not clickable */ }
                 is Recording -> openRecording(item)
             }
         }
@@ -228,6 +238,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         when (item) {
             is Recording -> showRecordingContextMenu(item)
             is LiveStreamCard -> showLiveContextMenu(item)
+            is PostProcessingCard -> { /* not clickable */ }
         }
     }
 
@@ -461,7 +472,10 @@ class VideoGridFragment : VerticalGridSupportFragment(),
 
     private fun rebuildGrid() {
         gridAdapter.clear()
-        if (!favOnly) liveCard?.let { gridAdapter.add(it) }
+        if (!favOnly) {
+            liveCard?.let { gridAdapter.add(it) }
+            postProcessingCard?.let { gridAdapter.add(it) }
+        }
         val list = if (favOnly) allRecordings.filter { it.isFav } else allRecordings
         gridAdapter.addAll(gridAdapter.size(), list)
     }
@@ -471,6 +485,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
         ApiClient.clearCacheFor(targetId)
         allRecordings = emptyList()
         liveCard = null
+        postProcessingCard = null
         dataLoaded = false
         gridAdapter.clear()
         statusText?.text = "Loading..."
@@ -481,6 +496,7 @@ class VideoGridFragment : VerticalGridSupportFragment(),
     private fun loadRecordings() {
         val targetId = arguments?.getInt("targetId") ?: return
         val isLive = arguments?.getBoolean("isLive", false) ?: false
+        val isPostprocessing = arguments?.getBoolean("isPostprocessing", false) ?: false
         val streamerName = arguments?.getString("streamerName") ?: ""
 
         if (isLive && streamerName.isNotEmpty()) {
@@ -490,6 +506,11 @@ class VideoGridFragment : VerticalGridSupportFragment(),
                 streamerName = streamerName
             )
             gridAdapter.add(liveCard!!)
+        }
+
+        if (isPostprocessing && streamerName.isNotEmpty()) {
+            postProcessingCard = PostProcessingCard(streamerName = streamerName)
+            gridAdapter.add(postProcessingCard!!)
         }
 
         lifecycleScope.launch {

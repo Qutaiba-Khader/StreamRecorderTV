@@ -6,6 +6,7 @@ data class Target(
     val platform: String,
     val countTotal: Int,
     val isLive: Boolean,
+    val isPostprocessing: Boolean = false,
     val logo: String?,
     val latestTs: Long
 )
@@ -41,6 +42,10 @@ data class LiveStreamData(
 data class LiveStreamCard(
     val title: String,
     val streams: Map<String, String>,
+    val streamerName: String
+)
+
+data class PostProcessingCard(
     val streamerName: String
 )
 

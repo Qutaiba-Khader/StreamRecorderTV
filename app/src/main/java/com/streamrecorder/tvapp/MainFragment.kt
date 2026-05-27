@@ -62,7 +62,7 @@ class MainFragment : BrowseSupportFragment() {
         targets.forEach { t ->
             val header = StreamerHeaderItem(
                 t.id.toLong(), t.name, t.logo, t.isLive,
-                t.platform, t.countTotal
+                t.isPostprocessing, t.platform, t.countTotal
             )
             rowsAdapter.add(PageRow(header))
         }
@@ -102,6 +102,7 @@ class MainFragment : BrowseSupportFragment() {
             val fragment = VideoGridFragment.newInstance(
                 targetId = header.id.toInt(),
                 isLive = streamerHeader?.isLive ?: false,
+                isPostprocessing = streamerHeader?.isPostprocessing ?: false,
                 streamerName = header.name ?: "",
                 logoUrl = streamerHeader?.logoUrl ?: "",
                 platform = streamerHeader?.platform ?: "tiktok",
